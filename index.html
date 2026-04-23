@@ -142,10 +142,10 @@ const EL = [620, 584, 601, 557, 612, 590];
 const C1 = { nome: 'Giuseppe Mangiapane', lista: 'Costruire Orizzonti' };
 const C2 = { nome: 'Giuliano Traina',     lista: 'Idea Comune' };
 
-// PIN accesso (3 ruoli)
+// PIN accesso (6 cifre, tutti diversi e random)
 const PIN_ADMIN = '529174';   // Super admin: solo tu
-const PIN_COORD = '4839';     // Coordinatore: gestione, no reset
-const PIN_RAPP  = '7261';     // Rappresentante: solo sua sezione
+const PIN_COORD = '683920';   // Coordinatore: gestione, no reset
+const PIN_RAPP  = '472615';   // Rappresentante: solo sua sezione
 
 // Token di autenticazione server-side (corrisponde a _auth/secret su Firestore)
 // Senza questo token nessuna scrittura va a buon fine
@@ -206,7 +206,7 @@ window.dispatchEvent(new Event('fb-ready'));
       <p style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">La tua sezione</p>
       <div id="pw-sez-g" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px"></div>
     </div>
-    <input type="password" class="pwi" id="pw-inp" placeholder="••••" maxlength="4" inputmode="numeric">
+    <input type="password" class="pwi" id="pw-inp" placeholder="••••" maxlength="6" inputmode="numeric">
     <div id="pw-err" style="font-size:12px;color:#C44;text-align:center;min-height:16px;margin-bottom:8px"></div>
     <button class="btn bp bw" onclick="checkPw()">Accedi</button>
     <div id="pw-fb-status" style="font-size:11px;color:var(--tx3);text-align:center;margin-top:12px">Connessione al server in corso…</div>
