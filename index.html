@@ -142,9 +142,10 @@ const EL = [620, 584, 601, 557, 612, 590];
 const C1 = { nome: 'Giuseppe Mangiapane', lista: 'Costruire Orizzonti' };
 const C2 = { nome: 'Giuliano Traina',     lista: 'Idea Comune' };
 
-// PIN accesso (4 cifre)
-const PIN_COORD = '1234';
-const PIN_RAPP  = '5678';
+// PIN accesso (3 ruoli)
+const PIN_ADMIN = '529174';   // Super admin: solo tu
+const PIN_COORD = '4839';     // Coordinatore: gestione, no reset
+const PIN_RAPP  = '7261';     // Rappresentante: solo sua sezione
 
 // Token di autenticazione server-side (corrisponde a _auth/secret su Firestore)
 // Senza questo token nessuna scrittura va a buon fine
@@ -196,7 +197,8 @@ window.dispatchEvent(new Event('fb-ready'));
     <p class="pwt">Elezioni Comunali</p>
     <p class="pws" id="pw-sub"></p>
     <p style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">Ruolo</p>
-    <div class="rg">
+    <div class="rg" style="grid-template-columns:1fr 1fr 1fr">
+      <button class="rb" onclick="selRole('admin',this)"><div class="ri">🔐</div><div class="rl">Admin</div></button>
       <button class="rb sel" onclick="selRole('coord',this)"><div class="ri">📊</div><div class="rl">Coordinatore</div></button>
       <button class="rb"     onclick="selRole('rapp',this)"><div class="ri">🗳️</div><div class="rl">Rappresentante</div></button>
     </div>
@@ -273,6 +275,7 @@ function onFbReady(){
       // Aggiorna la UI se siamo in una vista che mostra i dati
       if(view==='home')showHome();
       else if(view==='dash')updDash();
+      else if(view==='public')updPublicDash();
       else if(view==='listdash')renListDash();
       else if(view==='sez' && String(selSez) in fresh){
         fd={...defSez(),...fresh[String(selSez)]};
@@ -292,6 +295,7 @@ function onFbReady(){
         // Refresh UI se in una vista dove si vedono nomi/candidati
         if(view==='home')showHome();
         else if(view==='dash')renDash();
+        else if(view==='public')showPublicDash();
         else if(view==='listdash')renListDash();
         else if(view==='sez')renSez();
         else if(view==='ballot')renBallot();
@@ -335,10 +339,9 @@ function makeBackup(reason='auto'){
   return snap;
 }
 function startBackupTimer(){
-  // Solo il coordinatore fa backup automatici
-  if(userRole!=='coord')return;
+  // Solo admin e coordinatore fanno backup automatici
+  if(userRole!=='admin'&&userRole!=='coord')return;
   clearInterval(bkTimer);
-  // Primo backup subito dopo 10 secondi (dà tempo a Firebase di caricare i dati)
   setTimeout(()=>{makeBackup('auto')},10000);
   bkTimer=setInterval(()=>{makeBackup('auto')},BK_INTERVAL);
 }
@@ -437,7 +440,12 @@ function cacheLoad(){
 }
 
 function defSez(){
-  return{votanti:0,bianche:0,nulle:0,vc1:0,vc2:0,vl1:0,vl2:0,p1:{},p2:{},vd:0,vd12:0,vd21:0,lastBallots:[],done:false,upd:null};
+  return{votanti:0,bianche:0,nulle:0,vc1:0,vc2:0,vl1:0,vl2:0,p1:{},p2:{},
+    /* Accoppiate: solo schede con ESATTAMENTE 2 preferenze della stessa lista.
+       coppieOrd: chiave "i>j" (primo indice, secondo indice, ordine conta)
+       coppieSet: chiave "min-max" (insieme, ordine non conta) */
+    coppieOrd1:{},coppieOrd2:{},coppieSet1:{},coppieSet2:{},
+    vd:0,vd12:0,vd21:0,lastBallots:[],done:false,upd:null};
 }
 function defCands(){
   return [
@@ -659,7 +667,9 @@ function wouldViolate(j,prefs,cands){
 }
 
 function totals(d){
-  let vt=0,bi=0,nu=0,vc1=0,vc2=0,vl1=0,vl2=0,el=0,vd=0;const p1={},p2={};
+  let vt=0,bi=0,nu=0,vc1=0,vc2=0,vl1=0,vl2=0,el=0,vd=0;
+  const p1={},p2={};
+  const coppieOrd1={},coppieOrd2={},coppieSet1={},coppieSet2={};
   for(let i=1;i<=N;i++){
     const s=d[i]||defSez();
     vt+=num(s.votanti);bi+=num(s.bianche);nu+=num(s.nulle);
@@ -670,10 +680,16 @@ function totals(d){
       p1[j]=(p1[j]||0)+num(s.p1&&s.p1[j]);
       p2[j]=(p2[j]||0)+num(s.p2&&s.p2[j]);
     }
+    // Aggrega coppie ordinate e non ordinate
+    for(const k in (s.coppieOrd1||{})){coppieOrd1[k]=(coppieOrd1[k]||0)+num(s.coppieOrd1[k])}
+    for(const k in (s.coppieOrd2||{})){coppieOrd2[k]=(coppieOrd2[k]||0)+num(s.coppieOrd2[k])}
+    for(const k in (s.coppieSet1||{})){coppieSet1[k]=(coppieSet1[k]||0)+num(s.coppieSet1[k])}
+    for(const k in (s.coppieSet2||{})){coppieSet2[k]=(coppieSet2[k]||0)+num(s.coppieSet2[k])}
   }
   const tv=vc1+vc2;
   const tvl=vl1+vl2;
   return{vt,bi,nu,vc1,vc2,vl1,vl2,el,tv,tvl,p1,p2,vd,
+    coppieOrd1,coppieOrd2,coppieSet1,coppieSet2,
     aff:el>0?vt/el*100:0,
     pc1:tv>0?vc1/tv*100:0,pc2:tv>0?vc2/tv*100:0,
     pl1:tvl>0?vl1/tvl*100:0,pl2:tvl>0?vl2/tvl*100:0};
@@ -710,6 +726,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   for(let i=1;i<=N;i++)allData[i]=defSez();
   cacheLoad();
   document.title='Elezioni — '+COMUNE;
+  // Vista pubblica: se ?public=1 nell'URL, bypassa login e mostra dashboard read-only
+  const urlParams=new URLSearchParams(window.location.search);
+  if(urlParams.get('public')==='1'){
+    userRole='public';userSez=null;
+    $('pw-screen').style.display='none';
+    $('app-root').style.display='block';
+    // Aspetta che Firebase carichi i dati
+    setTimeout(()=>{showPublicDash()},500);
+  }
 });
 
 function selRole(r,btn){
@@ -727,7 +752,10 @@ function selLoginSez(n,btn){
 }
 function checkPw(){
   const pw=$('pw-inp').value.trim();const err=$('pw-err');err.textContent='';
-  if(selRoleVal==='coord'){
+  if(selRoleVal==='admin'){
+    if(pw!==PIN_ADMIN){err.textContent='PIN errato';return}
+    userRole='admin';userSez=null;
+  }else if(selRoleVal==='coord'){
     if(pw!==PIN_COORD){err.textContent='PIN errato';return}
     userRole='coord';userSez=null;
   }else{
@@ -758,13 +786,15 @@ function showHome(){
       <span class="ss">${s.done?'Completa':s.upd?num(s.votanti)+' sch.':'Attesa'}</span>
     </div>`;
   }
+  const ruoloLabel=userRole==='admin'?'Admin':userRole==='coord'?'Coordinatore':'Sezione '+userSez;
+  const isPower=userRole==='admin'||userRole==='coord';
   $('root').innerHTML=`
     <div class="tb">
       <div><div class="tb-t">${COMUNE}</div>
-      <div class="tb-s">${DATA_EL} · ${userRole==='coord'?'Coordinatore':'Sezione '+userSez} · <span class="conn-indicator conn ${isOnline?'':'off'}">${isOnline?'<span class="asdot"></span> online':'<span class="asdot off"></span> offline'}</span></div></div>
+      <div class="tb-s">${DATA_EL} · ${ruoloLabel} · <span class="conn-indicator conn ${isOnline?'':'off'}">${isOnline?'<span class="asdot"></span> online':'<span class="asdot off"></span> offline'}</span></div></div>
       <span class="badge bok">${done}/${N} sez.</span>
     </div>
-    ${userRole==='coord'?`
+    ${isPower?`
     <button class="btn bp bw blg" style="margin-bottom:10px" onclick="showDash()">📊  Dashboard Generale</button>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <button class="btn" style="background:var(--c1l);color:var(--c1t);border-color:#A8CAEA;font-weight:600" onclick="showListDash(0)">
@@ -783,18 +813,27 @@ function showHome(){
     `}
     <p class="ct" style="margin-bottom:10px">Sezioni elettorali</p>
     <div class="sg" style="margin-bottom:1.25rem">${btns}</div>
-    ${userRole==='coord'?`
-    <div class="card"><span class="ct">backup dati</span>
+    ${userRole==='admin'?`
+    <div class="card" style="border-color:#E8BBBB;background:#FEF0F0">
+      <span class="ct" style="color:#8B1A1A">🔐 Zona Admin — azioni distruttive</span>
       <div class="io">
         <button class="btn" onclick="exportJSON()">📥 Esporta JSON</button>
         <button class="btn bd2" onclick="resetAll()">🗑 Reset Tutto</button>
       </div>
+      <p style="font-size:11px;color:#8B1A1A;margin-top:8px;line-height:1.4">Solo il super admin può cancellare dati. Coordinatori e rappresentanti non hanno accesso a queste funzioni. C'è sempre un backup automatico di sicurezza prima del reset.</p>
+    </div>`:userRole==='coord'?`
+    <div class="card">
+      <span class="ct">funzioni coordinatore</span>
+      <div class="io">
+        <button class="btn" onclick="exportJSON()">📥 Esporta JSON</button>
+      </div>
+      <p style="font-size:12px;color:var(--tx3);margin-top:8px;line-height:1.4">Le funzioni di reset e cancellazione sono riservate all'admin. In caso di necessità di annullare dati, contatta l'admin.</p>
     </div>`:`
     <div class="card">
       <span class="ct">info</span>
       <p style="font-size:13px;color:var(--tx2);line-height:1.7">
         Le schede che inserisci vengono salvate <strong>in tempo reale sul server Google</strong>.
-        Il coordinatore vede ogni voto entro 1-2 secondi.
+        Il coordinatore e l'admin vedono ogni voto entro 1-2 secondi.
       </p>
     </div>`}
   `;
@@ -1128,6 +1167,18 @@ async function doSaveBallot(){
       const pk=d.lista===1?'p1':'p2';
       if(!fd[pk])fd[pk]={};
       d.prefs.forEach(j=>{fd[pk][j]=(fd[pk][j]||0)+1});
+      // Accoppiate: solo se esattamente 2 preferenze
+      if(d.prefs.length===2){
+        const [a,b]=d.prefs;
+        const keyOrd=a+'>'+b;        // ordinata (a è 1° pref, b è 2°)
+        const keySet=Math.min(a,b)+'-'+Math.max(a,b);  // non ordinata
+        const kOrd=d.lista===1?'coppieOrd1':'coppieOrd2';
+        const kSet=d.lista===1?'coppieSet1':'coppieSet2';
+        if(!fd[kOrd])fd[kOrd]={};
+        if(!fd[kSet])fd[kSet]={};
+        fd[kOrd][keyOrd]=(fd[kOrd][keyOrd]||0)+1;
+        fd[kSet][keySet]=(fd[kSet][keySet]||0)+1;
+      }
     }
   }
   // Storico ultime 10 schede
@@ -1174,6 +1225,16 @@ async function undoLast(){
     if(d.lista===1||d.lista===2){
       const pk=d.lista===1?'p1':'p2';
       if(fd[pk])d.prefs.forEach(j=>{if(fd[pk][j]!==undefined)fd[pk][j]=Math.max(0,fd[pk][j]-1)});
+      // Sottrai coppie
+      if(d.prefs.length===2){
+        const [a,b]=d.prefs;
+        const keyOrd=a+'>'+b;
+        const keySet=Math.min(a,b)+'-'+Math.max(a,b);
+        const kOrd=d.lista===1?'coppieOrd1':'coppieOrd2';
+        const kSet=d.lista===1?'coppieSet1':'coppieSet2';
+        if(fd[kOrd]&&fd[kOrd][keyOrd]!==undefined)fd[kOrd][keyOrd]=Math.max(0,fd[kOrd][keyOrd]-1);
+        if(fd[kSet]&&fd[kSet][keySet]!==undefined)fd[kSet][keySet]=Math.max(0,fd[kSet][keySet]-1);
+      }
     }
   }
   fd.upd=new Date().toISOString();
@@ -1184,6 +1245,9 @@ async function undoLast(){
 }
 
 async function annullaScheda(idx){
+  // Solo admin può annullare sempre; rappresentante solo sue sezioni; coordinatore NO
+  if(userRole==='coord'){alert('L\'annullamento schede è riservato ad admin e rappresentanti della sezione.');closeModal();return}
+  if(userRole==='rapp' && userSez!==selSez){alert('Puoi annullare solo schede della tua sezione.');closeModal();return}
   if(!fd.lastBallots||!fd.lastBallots[idx])return;
   const sch=fd.lastBallots[idx];
   const d=sch.data;
@@ -1204,6 +1268,16 @@ async function annullaScheda(idx){
     if(d.lista===1||d.lista===2){
       const pk=d.lista===1?'p1':'p2';
       if(fd[pk])d.prefs.forEach(j=>{if(fd[pk][j]!==undefined)fd[pk][j]=Math.max(0,fd[pk][j]-1)});
+      // Sottrai coppie
+      if(d.prefs.length===2){
+        const [a,b]=d.prefs;
+        const keyOrd=a+'>'+b;
+        const keySet=Math.min(a,b)+'-'+Math.max(a,b);
+        const kOrd=d.lista===1?'coppieOrd1':'coppieOrd2';
+        const kSet=d.lista===1?'coppieSet1':'coppieSet2';
+        if(fd[kOrd]&&fd[kOrd][keyOrd]!==undefined)fd[kOrd][keyOrd]=Math.max(0,fd[kOrd][keyOrd]-1);
+        if(fd[kSet]&&fd[kSet][keySet]!==undefined)fd[kSet][keySet]=Math.max(0,fd[kSet][keySet]-1);
+      }
     }
   }
   fd.nulle=(fd.nulle||0)+1;
@@ -1360,6 +1434,15 @@ function showDash(){
   view='dash';killCharts();renDash();
 }
 function tblRows(d){
+  // Calcola massimi per heatmap
+  const maxVc=Math.max(1,...Array.from({length:N},(_,i)=>Math.max(num((d[i+1]||defSez()).vc1),num((d[i+1]||defSez()).vc2))));
+  const maxVl=Math.max(1,...Array.from({length:N},(_,i)=>Math.max(num((d[i+1]||defSez()).vl1),num((d[i+1]||defSez()).vl2))));
+  const heatBg=(v,maxV,idx)=>{
+    if(v<=0)return 'transparent';
+    const intensity=Math.min(1,v/maxV);
+    const alpha=(0.08+intensity*0.40).toFixed(2);
+    return idx===0?`rgba(27,82,153,${alpha})`:`rgba(184,64,32,${alpha})`;
+  };
   return Array.from({length:N},(_,i)=>{
     const s=d[i+1]||defSez(),el=EL[i],tv=num(s.vc1)+num(s.vc2),tvl=num(s.vl1)+num(s.vl2);
     const af=el>0?(num(s.votanti)/el*100).toFixed(1):'0.0';
@@ -1367,10 +1450,10 @@ function tblRows(d){
     const pl1=tvl>0?(num(s.vl1)/tvl*100).toFixed(1):'—',pl2=tvl>0?(num(s.vl2)/tvl*100).toFixed(1):'—';
     const bg=s.done?`<span class="badge bok">Completa</span>`:s.upd?`<span class="badge bwip">${ft(s.upd)}</span>`:`<span class="badge bwt">Attesa</span>`;
     return`<tr><td style="font-weight:600">${i+1}</td><td>${fn(s.votanti)}</td>
-      <td style="color:var(--c1)">${fn(s.vc1)} <small style="color:var(--tx3)">${tv>0?'('+ps1+'%)':''}</small></td>
-      <td style="color:var(--c2)">${fn(s.vc2)} <small style="color:var(--tx3)">${tv>0?'('+ps2+'%)':''}</small></td>
-      <td style="color:var(--c1);background:var(--c1l)">${fn(s.vl1)} <small style="color:var(--tx3)">${tvl>0?'('+pl1+'%)':''}</small></td>
-      <td style="color:var(--c2);background:var(--c2l)">${fn(s.vl2)} <small style="color:var(--tx3)">${tvl>0?'('+pl2+'%)':''}</small></td>
+      <td style="background:${heatBg(num(s.vc1),maxVc,0)};font-weight:600">${fn(s.vc1)} <small style="color:var(--tx3)">${tv>0?'('+ps1+'%)':''}</small></td>
+      <td style="background:${heatBg(num(s.vc2),maxVc,1)};font-weight:600">${fn(s.vc2)} <small style="color:var(--tx3)">${tv>0?'('+ps2+'%)':''}</small></td>
+      <td style="background:${heatBg(num(s.vl1),maxVl,0)};font-weight:600">${fn(s.vl1)} <small style="color:var(--tx3)">${tvl>0?'('+pl1+'%)':''}</small></td>
+      <td style="background:${heatBg(num(s.vl2),maxVl,1)};font-weight:600">${fn(s.vl2)} <small style="color:var(--tx3)">${tvl>0?'('+pl2+'%)':''}</small></td>
       <td>${af}%</td><td>${num(s.vd)>0?`<span style="color:var(--am)">${fn(s.vd)}</span>`:'—'}</td><td>${bg}</td></tr>`;
   }).join('');
 }
@@ -1447,7 +1530,44 @@ function initCharts(){
   const lbl2=buildShortLabels(CANDS[1]||[]);
   const s1=CANDS[0].map((c,j)=>({n:lbl1[j]||('C'+(j+1)),v:t.p1[j]||0})).sort((a,b)=>b.v-a.v);
   const s2=CANDS[1].map((c,j)=>({n:lbl2[j]||('C'+(j+1)),v:t.p2[j]||0})).sort((a,b)=>b.v-a.v);
-  const mkP=(id,data,col)=>{const ctx=$(id);if(!ctx)return null;return new Chart(ctx,{type:'bar',data:{labels:data.map(x=>x.n),datasets:[{data:data.map(x=>x.v),backgroundColor:col,borderRadius:3,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(0,0,0,.06)'},ticks:{font:{size:10},color:'#888'}},y:{grid:{display:false},ticks:{font:{size:10},color:'#555'}}}}});};
+  const mkP=(id,data,col)=>{
+    const ctx=$(id);if(!ctx)return null;
+    const maxVal=Math.max(1,...data.map(x=>x.v));
+    return new Chart(ctx,{
+      type:'bar',
+      data:{labels:data.map(x=>x.n),datasets:[{data:data.map(x=>x.v),backgroundColor:col,borderRadius:3,borderSkipped:false}]},
+      options:{
+        indexAxis:'y',responsive:true,
+        layout:{padding:{right:30}},
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{label:c=>' '+fn(c.parsed.x)+' voti'}}
+        },
+        scales:{
+          x:{display:false,beginAtZero:true,max:maxVal*1.1},
+          y:{grid:{display:false},ticks:{font:{size:10},color:'#555'}}
+        }
+      },
+      plugins:[{
+        id:'dataLabels',
+        afterDatasetsDraw(chart){
+          const {ctx,data,scales:{x,y}}=chart;
+          ctx.save();
+          ctx.font="600 11px 'DM Mono', monospace";
+          ctx.fillStyle=col;
+          ctx.textBaseline='middle';
+          data.datasets[0].data.forEach((val,i)=>{
+            if(val>0){
+              const px=x.getPixelForValue(val);
+              const py=y.getPixelForValue(i);
+              ctx.fillText(' '+fn(val),px+4,py);
+            }
+          });
+          ctx.restore();
+        }
+      }]
+    });
+  };
   charts.p1=mkP('ch-p1',s1,'#1B5299');charts.p2=mkP('ch-p2',s2,'#B84020');
   renderProiezioneContent();
 }
@@ -1477,12 +1597,135 @@ function updDash(){
     if(!ch)return;
     const lbls=buildShortLabels(cands||[]);
     const s=cands.map((c,j)=>({n:lbls[j]||('C'+(j+1)),v:t[pk][j]||0})).sort((a,b)=>b.v-a.v);
-    ch.data.labels=s.map(x=>x.n);ch.data.datasets[0].data=s.map(x=>x.v);ch.update('none');
+    ch.data.labels=s.map(x=>x.n);ch.data.datasets[0].data=s.map(x=>x.v);
+    const maxVal=Math.max(1,...s.map(x=>x.v));
+    if(ch.options.scales.x)ch.options.scales.x.max=maxVal*1.1;
+    ch.update('none');
   };
   upd(charts.p1,CANDS[0],'p1');upd(charts.p2,CANDS[1],'p2');
   renderProiezioneContent();
 }
 function startClock(){clearInterval(clockI);const f=()=>{const e=$('live-clk');if(e)e.textContent=new Date().toLocaleTimeString('it-IT')};f();clockI=setInterval(f,1000)}
+
+/* ══ DASHBOARD PUBBLICA (link ?public=1) ═══════════════════
+   Accessibile a chiunque abbia il link, senza login.
+   Mostra solo dati basici: affluenza, voti sindaco, voti lista, voti consiglieri.
+   NIENTE proiezione consiglio, NIENTE dettagli strategici, NIENTE export.
+═══════════════════════════════════════════════════════════ */
+function showPublicDash(){
+  view='public';killCharts();
+  const t=totals(allData);
+  const done=Object.values(allData).filter(d=>d.done).length;
+
+  // Preferenze ordinate per lista
+  const lbl1=buildShortLabels(CANDS[0]||[]);
+  const lbl2=buildShortLabels(CANDS[1]||[]);
+  const s1=(CANDS[0]||[]).map((c,j)=>({n:lbl1[j]||('C'+(j+1)),v:t.p1[j]||0,g:c.genere})).sort((a,b)=>b.v-a.v);
+  const s2=(CANDS[1]||[]).map((c,j)=>({n:lbl2[j]||('C'+(j+1)),v:t.p2[j]||0,g:c.genere})).sort((a,b)=>b.v-a.v);
+
+  $('root').className='wide';
+  $('root').innerHTML=`
+    <div class="tb">
+      <div><div class="tb-t">${COMUNE} — Risultati in diretta</div>
+      <div class="tb-s">${DATA_EL} · vista pubblica · <span id="live-clk"></span> · <span class="conn-indicator conn ${isOnline?'':'off'}">${isOnline?'<span class="asdot"></span> live':'<span class="asdot off"></span> offline'}</span></div></div>
+      <span class="badge bok">${done}/${N} sezioni</span>
+    </div>
+
+    <div class="kg">
+      <div class="kpi"><div class="kl">Affluenza</div><div class="kv" id="pd-aff" style="color:var(--c1)">${pct(t.aff)}</div><div class="ks">${fn(t.vt)} / ${fn(t.el)} elettori</div></div>
+      <div class="kpi"><div class="kl">Schede valide</div><div class="kv" id="pd-tv" style="font-size:22px">${fn(t.tv)}</div><div class="ks" id="pd-bnu">${fn(t.bi)} bianche · ${fn(t.nu)} nulle</div></div>
+      <div class="kpi"><div class="kl">Sezioni scrutinate</div><div class="kv" id="pd-sez">${done}<span style="font-size:14px;font-weight:400;color:var(--tx3)"> /${N}</span></div><div class="ks">scrutinio in corso</div></div>
+    </div>
+
+    <p class="ct" style="margin-top:1rem;margin-bottom:8px">voti candidati sindaco</p>
+    <div class="cg">
+      <div class="cb cb1"><div class="cl2">SINDACO</div><div class="cn">${C1.nome}</div><div class="cv" id="pd-vc1">${fn(t.vc1)}</div><div class="cp" id="pd-pc1">${pct(t.pc1)}</div><div class="pt"><div class="pf" id="pd-b1" style="background:var(--c1);width:${pct(t.pc1)}"></div></div></div>
+      <div class="cb cb2"><div class="cl2">SINDACO</div><div class="cn">${C2.nome}</div><div class="cv" id="pd-vc2">${fn(t.vc2)}</div><div class="cp" id="pd-pc2">${pct(t.pc2)}</div><div class="pt"><div class="pf" id="pd-b2" style="background:var(--c2);width:${pct(t.pc2)}"></div></div></div>
+    </div>
+
+    <p class="ct" style="margin-top:1rem;margin-bottom:8px">voti di lista</p>
+    <div class="cg">
+      <div class="cb cb1"><div class="cl2">LISTA</div><div class="cn">${listaNomi[0]}</div><div class="cv" id="pd-vl1">${fn(t.vl1)}</div><div class="cp" id="pd-pl1">${pct(t.pl1)}</div><div class="pt"><div class="pf" id="pd-bl1" style="background:var(--c1);width:${pct(t.pl1)}"></div></div></div>
+      <div class="cb cb2"><div class="cl2">LISTA</div><div class="cn">${listaNomi[1]}</div><div class="cv" id="pd-vl2">${fn(t.vl2)}</div><div class="cp" id="pd-pl2">${pct(t.pl2)}</div><div class="pt"><div class="pf" id="pd-bl2" style="background:var(--c2);width:${pct(t.pl2)}"></div></div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:1rem;margin-bottom:10px">
+      <div class="card" style="margin:0"><span class="ct" style="color:var(--c1m)">preferenze — ${listaNomi[0]}</span><canvas id="pd-ch1" height="220"></canvas></div>
+      <div class="card" style="margin:0"><span class="ct" style="color:var(--c2m)">preferenze — ${listaNomi[1]}</span><canvas id="pd-ch2" height="220"></canvas></div>
+    </div>
+
+    <div class="card" style="text-align:center;padding:1rem">
+      <p style="font-size:11px;color:var(--tx3);line-height:1.5">
+        Pagina di visualizzazione pubblica aggiornata in tempo reale dal server.<br>
+        I dati sono provvisori e possono cambiare fino alla chiusura dello scrutinio.
+      </p>
+    </div>
+  `;
+  startClock();
+
+  // Grafici pubblici con data labels
+  const mkPub=(id,data,colHex)=>{
+    const ctx=$(id);if(!ctx)return null;
+    const maxVal=Math.max(1,...data.map(x=>x.v));
+    return new Chart(ctx,{
+      type:'bar',
+      data:{labels:data.map(x=>x.n),datasets:[{data:data.map(x=>x.v),backgroundColor:colHex,borderRadius:3,borderSkipped:false}]},
+      options:{
+        indexAxis:'y',responsive:true,
+        layout:{padding:{right:30}},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fn(c.parsed.x)+' preferenze'}}},
+        scales:{x:{display:false,beginAtZero:true,max:maxVal*1.1},y:{grid:{display:false},ticks:{font:{size:10},color:'#555'}}}
+      },
+      plugins:[{
+        id:'dataLabels',
+        afterDatasetsDraw(chart){
+          const {ctx,data,scales:{x,y}}=chart;
+          ctx.save();ctx.font="600 11px 'DM Mono', monospace";ctx.fillStyle=colHex;ctx.textBaseline='middle';
+          data.datasets[0].data.forEach((val,i)=>{
+            if(val>0){const px=x.getPixelForValue(val);const py=y.getPixelForValue(i);ctx.fillText(' '+fn(val),px+4,py)}
+          });
+          ctx.restore();
+        }
+      }]
+    });
+  };
+  charts.pub1=mkPub('pd-ch1',s1,'#1B5299');
+  charts.pub2=mkPub('pd-ch2',s2,'#B84020');
+}
+
+// Update della dashboard pubblica (chiamata dal listener Firebase)
+function updPublicDash(){
+  if(view!=='public')return;
+  const t=totals(allData);
+  const done=Object.values(allData).filter(d=>d.done).length;
+  const set=(id,v)=>{const e=$(id);if(e)e.textContent=v};
+  const setH=(id,v)=>{const e=$(id);if(e)e.innerHTML=v};
+  set('pd-aff',pct(t.aff));
+  set('pd-tv',fn(t.tv));
+  set('pd-bnu',fn(t.bi)+' bianche · '+fn(t.nu)+' nulle');
+  setH('pd-sez',`${done}<span style="font-size:14px;font-weight:400;color:var(--tx3)"> /${N}</span>`);
+  set('pd-vc1',fn(t.vc1));set('pd-pc1',pct(t.pc1));
+  set('pd-vc2',fn(t.vc2));set('pd-pc2',pct(t.pc2));
+  set('pd-vl1',fn(t.vl1));set('pd-pl1',pct(t.pl1));
+  set('pd-vl2',fn(t.vl2));set('pd-pl2',pct(t.pl2));
+  const b1=$('pd-b1');if(b1)b1.style.width=pct(t.pc1);
+  const b2=$('pd-b2');if(b2)b2.style.width=pct(t.pc2);
+  const bl1=$('pd-bl1');if(bl1)bl1.style.width=pct(t.pl1);
+  const bl2=$('pd-bl2');if(bl2)bl2.style.width=pct(t.pl2);
+  // Aggiorna grafici
+  const updCh=(ch,cands,pk)=>{
+    if(!ch)return;
+    const lbls=buildShortLabels(cands||[]);
+    const s=cands.map((c,j)=>({n:lbls[j]||('C'+(j+1)),v:t[pk][j]||0})).sort((a,b)=>b.v-a.v);
+    ch.data.labels=s.map(x=>x.n);
+    ch.data.datasets[0].data=s.map(x=>x.v);
+    const maxVal=Math.max(1,...s.map(x=>x.v));
+    if(ch.options.scales.x)ch.options.scales.x.max=maxVal*1.1;
+    ch.update('none');
+  };
+  updCh(charts.pub1,CANDS[0],'p1');
+  updCh(charts.pub2,CANDS[1],'p2');
+}
 
 /* ══ RENDER CONTENUTO PROIEZIONE CONSIGLIO ═════════════════ */
 function renderProiezioneContent(){
@@ -1605,7 +1848,6 @@ function renListDash(){
   const t=totals(allData);
   const prefsByCand=idx===0?t.p1:t.p2;
 
-  // Array con dati arricchiti per ogni candidato
   const enriched=cands.map((c,j)=>{
     const sezionData=Array.from({length:N},(_,i)=>num((allData[i+1]||defSez())[pk]&&(allData[i+1]||defSez())[pk][j]));
     return {
@@ -1615,13 +1857,26 @@ function renListDash(){
     };
   });
 
-  // Ordina per preferenze decrescenti
   const sorted=[...enriched].sort((a,b)=>b.totale-a.totale);
   const totPref=sorted.reduce((sum,c)=>sum+c.totale,0);
 
-  // Tabella candidato x sezione
+  // Heatmap: trova il massimo per calibrare intensità sfondo celle
+  const maxSingleSez=Math.max(1,...sorted.flatMap(c=>c.sezioni));
+
+  // Funzione che genera colore di sfondo graduale proporzionale al valore
+  const heatBg=(v,maxV)=>{
+    if(v<=0)return 'transparent';
+    const intensity=Math.min(1,v/maxV);
+    // Lerp alpha 0.08 → 0.55 dal min al max
+    const alpha=(0.08+intensity*0.47).toFixed(2);
+    return idx===0
+      ? `rgba(27,82,153,${alpha})`
+      : `rgba(184,64,32,${alpha})`;
+  };
+
+  // Tabella candidato x sezione con heatmap
   const tblHdr=['Pos','Candidato','Gen','Tot','%',...Array.from({length:N},(_,i)=>'Sez.'+(i+1))];
-  const tblRows=sorted.map((c,pos)=>{
+  const tblRowsHTML=sorted.map((c,pos)=>{
     const pctTot=totPref>0?(c.totale/totPref*100).toFixed(1)+'%':'—';
     const cells=[
       `<td style="font-weight:600;color:var(--tx3);font-family:'DM Mono',monospace">${pos+1}</td>`,
@@ -1629,12 +1884,15 @@ function renListDash(){
       `<td>${gB(c.genere)}</td>`,
       `<td style="font-weight:700;color:${col};font-family:'DM Mono',monospace">${fn(c.totale)}</td>`,
       `<td style="color:var(--tx3);font-family:'DM Mono',monospace;font-size:11px">${pctTot}</td>`,
-      ...c.sezioni.map(v=>`<td style="font-family:'DM Mono',monospace;${v>0?'':'color:var(--tx3)'}">${v>0?fn(v):'—'}</td>`)
+      ...c.sezioni.map(v=>{
+        const bg=heatBg(v,maxSingleSez);
+        const tc=v>=maxSingleSez*0.6?'#fff':(v>0?(idx===0?'var(--c1t)':'var(--c2t)'):'var(--tx3)');
+        return `<td style="font-family:'DM Mono',monospace;background:${bg};color:${tc};font-weight:${v>0?'600':'400'};text-align:center">${v>0?fn(v):'—'}</td>`;
+      })
     ];
     return `<tr>${cells.join('')}</tr>`;
   }).join('');
 
-  // Totali per sezione
   const sezTotals=Array.from({length:N},(_,i)=>sorted.reduce((sum,c)=>sum+c.sezioni[i],0));
   const totalRow=`<tr style="background:${colBg};font-weight:600">
     <td></td>
@@ -1642,21 +1900,70 @@ function renListDash(){
     <td></td>
     <td style="color:${col};font-family:'DM Mono',monospace">${fn(totPref)}</td>
     <td></td>
-    ${sezTotals.map(v=>`<td style="color:${colMid};font-family:'DM Mono',monospace">${fn(v)}</td>`).join('')}
+    ${sezTotals.map(v=>`<td style="color:${colMid};font-family:'DM Mono',monospace;text-align:center">${fn(v)}</td>`).join('')}
   </tr>`;
 
-  // Top 5 cards
-  const top5=sorted.slice(0,5);
-  const top5HTML=top5.map((c,pos)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${colBg};border:1px solid ${idx===0?'#A8CAEA':'#EAB8A8'};border-radius:var(--rs);margin-bottom:6px">
+  // ═══ TOP TICKET ═══
+  // Accoppiate ordinate (primo → secondo)
+  const coppieOrd=idx===0?t.coppieOrd1:t.coppieOrd2;
+  const coppieSet=idx===0?t.coppieSet1:t.coppieSet2;
+
+  const coppieOrdList=Object.entries(coppieOrd||{})
+    .map(([k,v])=>{
+      const [a,b]=k.split('>').map(n=>parseInt(n));
+      return {a,b,voti:num(v),candA:cands[a],candB:cands[b]};
+    })
+    .filter(x=>x.candA&&x.candB&&x.voti>0)
+    .sort((a,b)=>b.voti-a.voti)
+    .slice(0,10);
+
+  const coppieSetList=Object.entries(coppieSet||{})
+    .map(([k,v])=>{
+      const [a,b]=k.split('-').map(n=>parseInt(n));
+      return {a,b,voti:num(v),candA:cands[a],candB:cands[b]};
+    })
+    .filter(x=>x.candA&&x.candB&&x.voti>0)
+    .sort((a,b)=>b.voti-a.voti)
+    .slice(0,10);
+
+  // Classifica singoli (top 10)
+  const singoliList=sorted.slice(0,10).filter(c=>c.totale>0);
+
+  const mkTicketRow=(c,pos,isCouple)=>{
+    if(isCouple){
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${colBg};border:1px solid ${idx===0?'#A8CAEA':'#EAB8A8'};border-radius:var(--rs);margin-bottom:6px">
+        <span style="min-width:24px;height:24px;border-radius:50%;background:${col};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;font-family:'DM Mono',monospace">${pos+1}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:${idx===0?'var(--c1t)':'var(--c2t)'};display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span>${c.candA.nome}</span>${gB(c.candA.genere)}
+            <span style="color:${colMid}">+</span>
+            <span>${c.candB.nome}</span>${gB(c.candB.genere)}
+          </div>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:${col};font-family:'DM Mono',monospace">${fn(c.voti)}</div>
+      </div>`;
+    }
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${colBg};border:1px solid ${idx===0?'#A8CAEA':'#EAB8A8'};border-radius:var(--rs);margin-bottom:6px">
       <span style="min-width:24px;height:24px;border-radius:50%;background:${col};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;font-family:'DM Mono',monospace">${pos+1}</span>
       <div style="flex:1">
         <div style="font-size:13px;font-weight:600;color:${idx===0?'var(--c1t)':'var(--c2t)'}">${c.nome}</div>
         <div style="font-size:11px;color:${colMid};display:flex;align-items:center;gap:5px">${gB(c.genere)} ${totPref>0?(c.totale/totPref*100).toFixed(1)+'% della lista':''}</div>
       </div>
       <div style="font-size:20px;font-weight:700;color:${col};font-family:'DM Mono',monospace">${fn(c.totale)}</div>
-    </div>
-  `).join('');
+    </div>`;
+  };
+
+  const tabSingoli=singoliList.length>0
+    ? singoliList.map((c,i)=>mkTicketRow(c,i,false)).join('')
+    : `<p style="font-size:12px;color:var(--tx3);padding:10px 0;text-align:center">Nessuna preferenza registrata</p>`;
+
+  const tabOrd=coppieOrdList.length>0
+    ? coppieOrdList.map((c,i)=>mkTicketRow(c,i,true)).join('')
+    : `<p style="font-size:12px;color:var(--tx3);padding:10px 0;text-align:center">Nessuna accoppiata registrata<br><small>richiede schede con 2 preferenze</small></p>`;
+
+  const tabSet=coppieSetList.length>0
+    ? coppieSetList.map((c,i)=>mkTicketRow(c,i,true)).join('')
+    : `<p style="font-size:12px;color:var(--tx3);padding:10px 0;text-align:center">Nessuna accoppiata registrata<br><small>richiede schede con 2 preferenze</small></p>`;
 
   $('root').className='wide';
   $('root').innerHTML=`
@@ -1676,17 +1983,25 @@ function renListDash(){
         <canvas id="ch-list" height="260"></canvas>
       </div>
       <div class="card" style="margin:0">
-        <span class="ct" style="color:${colMid}">top 5</span>
-        ${top5HTML||'<p style="font-size:12px;color:var(--tx3)">Nessuna preferenza ancora registrata</p>'}
+        <div style="display:flex;border:1px solid var(--bd);border-radius:var(--rs);overflow:hidden;margin-bottom:12px">
+          <button class="tk-tab tk-active" data-tab="singoli" onclick="setTicketTab('singoli',${idx})" style="flex:1;padding:8px;border:none;background:${col};color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Singoli</button>
+          <button class="tk-tab" data-tab="ord" onclick="setTicketTab('ord',${idx})" style="flex:1;padding:8px;border:none;background:var(--sf);color:var(--tx2);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Accoppiate ordinate</button>
+          <button class="tk-tab" data-tab="set" onclick="setTicketTab('set',${idx})" style="flex:1;padding:8px;border:none;background:var(--sf);color:var(--tx2);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Accoppiate</button>
+        </div>
+        <div id="tk-singoli" style="display:block">${tabSingoli}</div>
+        <div id="tk-ord" style="display:none">${tabOrd}</div>
+        <div id="tk-set" style="display:none">${tabSet}</div>
+        <p id="tk-info" style="font-size:10px;color:var(--tx3);margin-top:8px;line-height:1.4">Classifica dei candidati più votati singolarmente.</p>
       </div>
     </div>
 
     <div class="card">
-      <span class="ct" style="color:${colMid}">dettaglio candidato × sezione</span>
+      <span class="ct" style="color:${colMid}">dettaglio candidato × sezione · heatmap</span>
+      <p style="font-size:11px;color:var(--tx3);margin-bottom:10px">le celle sono colorate in base all'intensità del voto (più scuro = più voti)</p>
       <div style="overflow-x:auto">
         <table class="tbl" style="min-width:700px">
           <thead><tr>${tblHdr.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
-          <tbody>${tblRows}${totalRow}</tbody>
+          <tbody>${tblRowsHTML}${totalRow}</tbody>
         </table>
       </div>
     </div>
@@ -1700,23 +2015,71 @@ function renListDash(){
 
   startClock();
 
-  // Chart orizzontale con tutti i 12 candidati
+  // Chart classifica con data labels e tutti i candidati
   const ctx=$('ch-list');
   if(ctx){
     if(charts.list)charts.list.destroy();
-    charts.list=new Chart(ctx,{type:'bar',
+    const chartData=sorted.map(c=>c.totale);
+    const maxVal=Math.max(1,...chartData);
+    charts.list=new Chart(ctx,{
+      type:'bar',
       data:{
-        labels:sorted.map(c=>c.nome.length>20?c.nome.slice(0,18)+'…':c.nome),
-        datasets:[{data:sorted.map(c=>c.totale),backgroundColor:colHex,borderRadius:3,borderSkipped:false}]
+        labels:sorted.map(c=>{
+          const n=c.nome;
+          return n.length>22?n.slice(0,20)+'…':n;
+        }),
+        datasets:[{data:chartData,backgroundColor:colHex,borderRadius:3,borderSkipped:false}]
       },
-      options:{indexAxis:'y',responsive:true,
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${fn(ctx.parsed.x)} preferenze`}}},
+      options:{
+        indexAxis:'y',responsive:true,
+        layout:{padding:{right:30}},
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{label:c=>' '+fn(c.parsed.x)+' preferenze'}}
+        },
         scales:{
-          x:{grid:{color:'rgba(0,0,0,.06)'},ticks:{font:{size:11},color:'#888'}},
+          x:{display:false,beginAtZero:true,max:maxVal*1.1},
           y:{grid:{display:false},ticks:{font:{size:11},color:'#444'}}
         }
-      }
+      },
+      plugins:[{
+        id:'dataLabels',
+        afterDatasetsDraw(chart){
+          const {ctx,data,scales:{x,y}}=chart;
+          ctx.save();
+          ctx.font="600 11px 'DM Mono', monospace";
+          ctx.fillStyle=colHex;
+          ctx.textBaseline='middle';
+          data.datasets[0].data.forEach((val,i)=>{
+            if(val>0){
+              const px=x.getPixelForValue(val);
+              const py=y.getPixelForValue(i);
+              ctx.fillText(' '+fn(val),px+4,py);
+            }
+          });
+          ctx.restore();
+        }
+      }]
     });
+  }
+}
+
+// Switch tab del widget Top Ticket
+function setTicketTab(tab,idx){
+  const col=idx===0?'#1B5299':'#B84020';
+  ['singoli','ord','set'].forEach(t=>{
+    const pane=$('tk-'+t);if(pane)pane.style.display=t===tab?'block':'none';
+  });
+  document.querySelectorAll('.tk-tab').forEach(btn=>{
+    const isActive=btn.dataset.tab===tab;
+    btn.style.background=isActive?col:'var(--sf)';
+    btn.style.color=isActive?'#fff':'var(--tx2)';
+  });
+  const info=$('tk-info');
+  if(info){
+    if(tab==='singoli')info.textContent='Classifica dei candidati più votati singolarmente.';
+    else if(tab==='ord')info.textContent='Accoppiate dove l\'ordine conta: 1ª + 2ª preferenza sulla stessa scheda. Solo schede con 2 preferenze.';
+    else info.textContent='Accoppiate senza ordine: coppie di candidati che appaiono insieme, indipendentemente dalla posizione. Solo schede con 2 preferenze.';
   }
 }
 
@@ -1815,11 +2178,12 @@ function exportJSON(){
   fbLogEvent({tipo:'export_json'});
 }
 async function resetAll(){
+  if(userRole!=='admin'){alert('Solo l\'admin può cancellare tutti i dati.');return}
   if(!confirm('Cancellare TUTTI i dati di scrutinio dal SERVER? Azione irreversibile e impatta TUTTI i dispositivi.'))return;
   if(!confirm('Ultima conferma: questo cancella i dati da tutti i dispositivi collegati. Un backup di sicurezza verrà creato automaticamente prima del reset. Continuo?'))return;
   makeBackup('pre-reset');
   for(let i=1;i<=N;i++){await fbSaveSez(i,defSez())}
-  fbLogEvent({tipo:'reset_all'});
+  fbLogEvent({tipo:'reset_all',ruolo:userRole});
   alert('Dati azzerati. Un backup è disponibile nella sezione Backup per il ripristino.');
   goHome();
 }
@@ -1837,6 +2201,7 @@ window.downloadBackup=downloadBackup;window.deleteBackup=deleteBackup;
 window.showModal=showModal;window.closeModal=closeModal;window.doSaveBallot=doSaveBallot;
 window.annullaScheda=annullaScheda;
 window.showStoricoSchede=showStoricoSchede;window.confermaAnnulla=confermaAnnulla;
+window.setTicketTab=setTicketTab;window.showPublicDash=showPublicDash;
 </script>
 </body>
 </html>
