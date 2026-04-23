@@ -437,7 +437,7 @@ function cacheLoad(){
 }
 
 function defSez(){
-  return{votanti:0,bianche:0,nulle:0,vc1:0,vc2:0,p1:{},p2:{},vd:0,vd12:0,vd21:0,done:false,upd:null};
+  return{votanti:0,bianche:0,nulle:0,vc1:0,vc2:0,vl1:0,vl2:0,p1:{},p2:{},vd:0,vd12:0,vd21:0,lastBallots:[],done:false,upd:null};
 }
 function defCands(){
   return [
@@ -514,23 +514,51 @@ function buildShortLabels(candList){
 }
 
 /* ══ PROIEZIONE CONSIGLIO COMUNALE ══════════════════════════
-   Regola Cammarata (comune <15k abitanti):
-   - Sindaco vincente: lista prende 8 seggi consiglieri
-   - Sindaco sconfitto: entra di diritto + 3 consiglieri per preferenze
-   Totale: 1 sindaco + 8 + 1 (sindaco sconfitto) + 3 = 13 figure
+   Regola Cammarata (comune <15k):
+   - SINDACO eletto = max(vc1, vc2)
+   - LISTA vincente = max(vl1, vl2) → prende 8 consiglieri
+   - LISTA perdente = altra → prende 3 consiglieri + sindaco sconfitto di diritto
+   
+   CASO "sindaco in minoranza": se sindaco vince ma sua lista perde:
+   - Lista del sindaco vincente: 5 consiglieri (lista in minoranza)
+   - Lista perdente del sindaco ma vincente come lista: 7 consiglieri
+   (totale resta 12 consiglieri + sindaco vincente + sindaco sconfitto)
 ═══════════════════════════════════════════════════════════ */
 function calcolaProiezione(){
   const t=totals(allData);
-  // Determina vincitore sindaco
-  let vincenteIdx, perdenteIdx;
-  if(t.vc1>t.vc2){vincenteIdx=0;perdenteIdx=1}
-  else if(t.vc2>t.vc1){vincenteIdx=1;perdenteIdx=0}
-  else{vincenteIdx=null;perdenteIdx=null} // Pareggio
 
-  const seggiVinc=8, seggiPerd=3;
+  // Vincitore sindaco (basato su vc1 vs vc2)
+  let sindacoVincIdx, sindacoPerdIdx;
+  if(t.vc1>t.vc2){sindacoVincIdx=0;sindacoPerdIdx=1}
+  else if(t.vc2>t.vc1){sindacoVincIdx=1;sindacoPerdIdx=0}
+  else{sindacoVincIdx=null;sindacoPerdIdx=null}
+
+  // Vincitore lista (basato su vl1 vs vl2)
+  let listaVincIdx, listaPerdIdx;
+  if(t.vl1>t.vl2){listaVincIdx=0;listaPerdIdx=1}
+  else if(t.vl2>t.vl1){listaVincIdx=1;listaPerdIdx=0}
+  else{listaVincIdx=null;listaPerdIdx=null}
+
+  const isPareggioSindaco = sindacoVincIdx===null;
+  const isPareggioLista = listaVincIdx===null;
+  // Caso sindaco in minoranza: sindaco vincente di una lista, ma l'altra lista ha più voti lista
+  const sindacoInMinoranza = !isPareggioSindaco && !isPareggioLista && (sindacoVincIdx!==listaVincIdx);
+
+  // Calcolo seggi per lista (escluso sindaco)
+  let seggiLista1Cons, seggiLista2Cons;
+  if(isPareggioSindaco || isPareggioLista){
+    seggiLista1Cons=0; seggiLista2Cons=0;
+  } else if(!sindacoInMinoranza){
+    // Caso normale: sindaco e lista coincidono
+    if(sindacoVincIdx===0){seggiLista1Cons=8;seggiLista2Cons=3}
+    else{seggiLista1Cons=3;seggiLista2Cons=8}
+  } else {
+    // Caso sindaco in minoranza: lista del sindaco vincente prende 5, lista vincente 7
+    if(sindacoVincIdx===0){seggiLista1Cons=5;seggiLista2Cons=7}
+    else{seggiLista1Cons=7;seggiLista2Cons=5}
+  }
 
   const mkClassifica=(idx)=>{
-    const pk=idx===0?'p1':'p2';
     return (CANDS[idx]||[]).map((c,j)=>({
       j, nome:c.nome||('Candidato '+(j+1)),
       genere:c.genere||'M',
@@ -540,67 +568,51 @@ function calcolaProiezione(){
 
   return {
     totals:t,
-    vincenteIdx, perdenteIdx,
+    sindacoVincIdx, sindacoPerdIdx,
+    listaVincIdx, listaPerdIdx,
+    isPareggioSindaco, isPareggioLista,
+    sindacoInMinoranza,
     classifica1: mkClassifica(0),
     classifica2: mkClassifica(1),
-    seggiVincente: seggiVinc,
-    seggiPerdente: seggiPerd,
-    isPareggio: vincenteIdx===null,
-    // Conta totale seggi per ogni lista (incluso sindaco)
-    seggiLista1: vincenteIdx===0 ? seggiVinc+1 : (vincenteIdx===1 ? seggiPerd+1 : 0),
-    seggiLista2: vincenteIdx===1 ? seggiVinc+1 : (vincenteIdx===0 ? seggiPerd+1 : 0)
+    seggiLista1Cons, seggiLista2Cons,
+    // Totale seggi lista (consiglieri + eventuale sindaco eletto + eventuale sindaco di diritto)
+    seggiTotali1: seggiLista1Cons + (sindacoVincIdx===0?1:0) + (sindacoPerdIdx===0?1:0),
+    seggiTotali2: seggiLista2Cons + (sindacoVincIdx===1?1:0) + (sindacoPerdIdx===1?1:0)
   };
 }
 
-/* Genera SVG del parlamentino a emiciclo con 13 sedili */
+/* Genera SVG del parlamentino a emiciclo con 13 sedili (1 sindaco + 12 consiglieri) */
 function renderParlamentino(proj){
-  const {vincenteIdx,perdenteIdx,seggiLista1,seggiLista2,isPareggio}=proj;
-  // 13 posti totali: 1 sindaco al centro sopra, 12 consiglieri in 2 file ad arco
+  const {sindacoVincIdx,seggiLista1Cons,seggiLista2Cons,isPareggioSindaco,isPareggioLista,sindacoInMinoranza,seggiTotali1,seggiTotali2}=proj;
   const w=600, h=280;
   const cx=w/2, cy=230;
 
-  // Determina colori dei seggi
   const colL1='#1B5299', colL2='#B84020', colEmpty='#D4D0C8';
   const seats=[];
 
-  // Sindaco (posizione centrale in alto)
-  const sindacoColor=isPareggio?colEmpty:(vincenteIdx===0?colL1:colL2);
-  const sindacoName=isPareggio?'—':(vincenteIdx===0?C1.nome.split(' ')[1]:C2.nome.split(' ')[1]);
-  seats.push({x:cx,y:70,r:22,color:sindacoColor,isSindaco:true,label:sindacoName});
+  // Sindaco al centro in alto
+  const sindacoColor=isPareggioSindaco?colEmpty:(sindacoVincIdx===0?colL1:colL2);
+  seats.push({x:cx,y:70,r:22,color:sindacoColor,isSindaco:true});
 
-  // 12 consiglieri in emiciclo su 2 file (6 interna + 6 esterna)
+  // 12 consiglieri in emiciclo (file interna 6 + esterna 6)
   const r1=115, r2=160;
-  const angleSpan=Math.PI;  // 180 gradi
-  const startAngle=Math.PI; // parte da sinistra
-
-  // File interna (6 seggi)
+  const angleSpan=Math.PI;
+  const startAngle=Math.PI;
   for(let i=0;i<6;i++){
     const a=startAngle + (i/5)*angleSpan*0.55 + angleSpan*0.22;
-    const x=cx + Math.cos(a)*r1;
-    const y=cy + Math.sin(a)*r1;
-    seats.push({x,y,r:16,idx:i,row:'inner'});
+    seats.push({x:cx+Math.cos(a)*r1,y:cy+Math.sin(a)*r1,r:16,row:'inner'});
   }
-  // File esterna (6 seggi)
   for(let i=0;i<6;i++){
     const a=startAngle + (i/5)*angleSpan*0.9 + angleSpan*0.05;
-    const x=cx + Math.cos(a)*r2;
-    const y=cy + Math.sin(a)*r2;
-    seats.push({x,y,r:16,idx:i+6,row:'outer'});
+    seats.push({x:cx+Math.cos(a)*r2,y:cy+Math.sin(a)*r2,r:16,row:'outer'});
   }
 
-  // Colora i 12 seggi consiglieri
-  // I primi seggiLista1 (esclusi il sindaco vincitore) a sinistra -> colL1
-  // I primi seggiLista2 (esclusi sindaco sconfitto) a destra -> colL2
-  // Assegnazione: lista vincente da sinistra, lista perdente da destra
-  const seggiConsL1 = isPareggio ? 0 : (vincenteIdx===0 ? 8 : 3);
-  const seggiConsL2 = isPareggio ? 0 : (vincenteIdx===1 ? 8 : 3);
-
-  // Seggi consiglieri partono dall'indice 1 (index 0 è il sindaco)
+  // Colorazione: lista 1 da sinistra (seggiLista1Cons), lista 2 da destra (seggiLista2Cons)
   for(let i=1;i<seats.length;i++){
     const pos=i-1; // 0..11
-    if(pos<seggiConsL1){
+    if(pos<seggiLista1Cons){
       seats[i].color=colL1;
-    } else if(pos>=12-seggiConsL2){
+    } else if(pos>=12-seggiLista2Cons){
       seats[i].color=colL2;
     } else {
       seats[i].color=colEmpty;
@@ -608,20 +620,21 @@ function renderParlamentino(proj){
   }
 
   const seatsHTML=seats.map(s=>{
-    const label=s.isSindaco
-      ? `<text x="${s.x}" y="${s.y+5}" text-anchor="middle" fill="#fff" style="font-size:10px;font-weight:600;font-family:'DM Mono',monospace">★</text>`
-      : '';
-    return `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${s.color}" stroke="#fff" stroke-width="2"/>${label}`;
+    const star=s.isSindaco?`<text x="${s.x}" y="${s.y+5}" text-anchor="middle" fill="#fff" style="font-size:14px;font-weight:600;font-family:'DM Mono',monospace">★</text>`:'';
+    return `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${s.color}" stroke="#fff" stroke-width="2"/>${star}`;
   }).join('');
 
   const legendY=h-15;
+  const minoranzaBadge=sindacoInMinoranza
+    ?`<text x="${cx}" y="115" text-anchor="middle" fill="var(--am)" style="font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif">⚠ SINDACO IN MINORANZA</text>`
+    :'';
+
   return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:600px;height:auto;display:block;margin:0 auto">
-    <!-- Sfondo emiciclo -->
     <path d="M ${cx-180} ${cy} A 180 180 0 0 1 ${cx+180} ${cy}" fill="none" stroke="#E8E5DC" stroke-width="1"/>
     ${seatsHTML}
-    <!-- Etichette laterali -->
-    <text x="40" y="${legendY}" fill="${colL1}" style="font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif">${listaNomi[0]}: ${seggiLista1}</text>
-    <text x="${w-40}" y="${legendY}" text-anchor="end" fill="${colL2}" style="font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif">${listaNomi[1]}: ${seggiLista2}</text>
+    ${minoranzaBadge}
+    <text x="40" y="${legendY}" fill="${colL1}" style="font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif">${listaNomi[0]}: ${seggiTotali1}</text>
+    <text x="${w-40}" y="${legendY}" text-anchor="end" fill="${colL2}" style="font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif">${listaNomi[1]}: ${seggiTotali2}</text>
     <text x="${cx}" y="${legendY}" text-anchor="middle" fill="var(--tx3)" style="font-size:10px;font-family:'DM Mono',monospace">Consiglio Comunale ${COMUNE}</text>
   </svg>`;
 }
@@ -646,19 +659,24 @@ function wouldViolate(j,prefs,cands){
 }
 
 function totals(d){
-  let vt=0,bi=0,nu=0,vc1=0,vc2=0,el=0,vd=0;const p1={},p2={};
+  let vt=0,bi=0,nu=0,vc1=0,vc2=0,vl1=0,vl2=0,el=0,vd=0;const p1={},p2={};
   for(let i=1;i<=N;i++){
     const s=d[i]||defSez();
     vt+=num(s.votanti);bi+=num(s.bianche);nu+=num(s.nulle);
-    vc1+=num(s.vc1);vc2+=num(s.vc2);el+=EL[i-1];vd+=num(s.vd);
+    vc1+=num(s.vc1);vc2+=num(s.vc2);
+    vl1+=num(s.vl1);vl2+=num(s.vl2);
+    el+=EL[i-1];vd+=num(s.vd);
     for(let j=0;j<12;j++){
       p1[j]=(p1[j]||0)+num(s.p1&&s.p1[j]);
       p2[j]=(p2[j]||0)+num(s.p2&&s.p2[j]);
     }
   }
   const tv=vc1+vc2;
-  return{vt,bi,nu,vc1,vc2,el,tv,p1,p2,vd,
-    aff:el>0?vt/el*100:0,pc1:tv>0?vc1/tv*100:0,pc2:tv>0?vc2/tv*100:0};
+  const tvl=vl1+vl2;
+  return{vt,bi,nu,vc1,vc2,vl1,vl2,el,tv,tvl,p1,p2,vd,
+    aff:el>0?vt/el*100:0,
+    pc1:tv>0?vc1/tv*100:0,pc2:tv>0?vc2/tv*100:0,
+    pl1:tvl>0?vl1/tvl*100:0,pl2:tvl>0?vl2/tvl*100:0};
 }
 function killCharts(){Object.values(charts).forEach(c=>c?.destroy());charts={}}
 function goHome(){clearInterval(clockI);killCharts();showHome()}
@@ -789,7 +807,9 @@ function goSez(i){
   fd={...defSez(),...(allData[i]||{})};renSez();
 }
 function renSez(){
-  const d=fd,el=EL[selSez-1],tv=num(d.vc1)+num(d.vc2);
+  const d=fd,el=EL[selSez-1];
+  const tv=num(d.vc1)+num(d.vc2);
+  const tvl=num(d.vl1)+num(d.vl2);
   const topP=(p,ci,col)=>{
     const items=Object.entries(p||{})
       .map(([j,c])=>({n:(CANDS[ci]&&CANDS[ci][j]?.nome)||'Cand.'+(+j+1),c:num(c)}))
@@ -797,6 +817,7 @@ function renSez(){
     if(!items.length)return`<p style="font-size:12px;color:var(--tx3);padding:4px 0">Nessuna preferenza</p>`;
     return items.map(e=>`<div class="sr"><span class="srl">${e.n}</span><span class="srv" style="color:${col}">${fn(e.c)}</span></div>`).join('');
   };
+  const hasUndo=d.lastBallots&&d.lastBallots.length>0;
   $('root').innerHTML=`
     <div class="tb">
       <div style="display:flex;align-items:center;gap:10px">
@@ -806,32 +827,47 @@ function renSez(){
       </div>
       ${d.done?'<span class="badge bok">Completata</span>':''}
     </div>
-    <div class="kg">
-      <div class="kpi"><div class="kl">Schede</div><div class="kv">${fn(d.votanti)}</div><div class="ks">${el>0?(num(d.votanti)/el*100).toFixed(1):0}%</div></div>
+    <div class="kg" style="grid-template-columns:1fr 1fr">
+      <div class="kpi"><div class="kl">Schede totali</div><div class="kv">${fn(d.votanti)}</div><div class="ks">${el>0?(num(d.votanti)/el*100).toFixed(1):0}% affluenza</div></div>
+      <div class="kpi"><div class="kl">Bianche · Nulle</div><div class="kv" style="font-size:18px">${fn(d.bianche)} · ${fn(d.nulle)}</div><div class="ks">${num(d.vd)>0?fn(d.vd)+' disgiunti':'—'}</div></div>
+    </div>
+    <div class="kg" style="grid-template-columns:1fr 1fr;margin-bottom:6px">
       <div class="kpi" style="background:var(--c1l);border-color:#A8CAEA">
-        <div class="kl" style="color:var(--c1m)">${C1.nome.split(' ')[1]}</div>
+        <div class="kl" style="color:var(--c1m)">Sindaco · ${C1.nome.split(' ').slice(-1)[0]}</div>
         <div class="kv" style="color:var(--c1)">${fn(d.vc1)}</div>
-        <div class="ks" style="color:var(--c1m)">${tv>0?(num(d.vc1)/tv*100).toFixed(1)+'%':'—'}</div>
+        <div class="ks" style="color:var(--c1m)">${tv>0?(num(d.vc1)/tv*100).toFixed(1)+'% sindaci':'—'}</div>
       </div>
       <div class="kpi" style="background:var(--c2l);border-color:#EAB8A8">
-        <div class="kl" style="color:var(--c2m)">${C2.nome.split(' ')[1]}</div>
+        <div class="kl" style="color:var(--c2m)">Sindaco · ${C2.nome.split(' ').slice(-1)[0]}</div>
         <div class="kv" style="color:var(--c2)">${fn(d.vc2)}</div>
-        <div class="ks" style="color:var(--c2m)">${tv>0?(num(d.vc2)/tv*100).toFixed(1)+'%':'—'}</div>
+        <div class="ks" style="color:var(--c2m)">${tv>0?(num(d.vc2)/tv*100).toFixed(1)+'% sindaci':'—'}</div>
+      </div>
+    </div>
+    <div class="kg" style="grid-template-columns:1fr 1fr">
+      <div class="kpi" style="background:var(--c1l);border-color:#A8CAEA">
+        <div class="kl" style="color:var(--c1m)">Lista · ${listaNomi[0]}</div>
+        <div class="kv" style="color:var(--c1)">${fn(d.vl1)}</div>
+        <div class="ks" style="color:var(--c1m)">${tvl>0?(num(d.vl1)/tvl*100).toFixed(1)+'% liste':'—'}</div>
+      </div>
+      <div class="kpi" style="background:var(--c2l);border-color:#EAB8A8">
+        <div class="kl" style="color:var(--c2m)">Lista · ${listaNomi[1]}</div>
+        <div class="kv" style="color:var(--c2)">${fn(d.vl2)}</div>
+        <div class="ks" style="color:var(--c2m)">${tvl>0?(num(d.vl2)/tvl*100).toFixed(1)+'% liste':'—'}</div>
       </div>
     </div>
     <div id="sez-msg"></div>
     <button class="btn bp bw blg" style="margin-bottom:8px" onclick="showBallot()">
       + Inserisci scheda #${num(d.votanti)+1}
     </button>
-    ${lastBallot?`<button class="btn bd2 bw" style="margin-bottom:12px" onclick="undoLast()">↩ Annulla ultimo voto</button>`:'<div style="height:12px"></div>'}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <button class="btn ${hasUndo?'bd2':''}" ${hasUndo?'':'disabled'} onclick="undoLast()">↩ Annulla ultimo</button>
+      <button class="btn ${hasUndo?'':''}" ${hasUndo?'':'disabled'} onclick="showStoricoSchede()">📋 Storico schede</button>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div class="card" style="margin:0"><span class="ct" style="color:var(--c1m)">${listaNomi[0]}</span>${topP(d.p1,0,'var(--c1)')}</div>
-      <div class="card" style="margin:0"><span class="ct" style="color:var(--c2m)">${listaNomi[1]}</span>${topP(d.p2,1,'var(--c2)')}</div>
+      <div class="card" style="margin:0"><span class="ct" style="color:var(--c1m)">Pref · ${listaNomi[0]}</span>${topP(d.p1,0,'var(--c1)')}</div>
+      <div class="card" style="margin:0"><span class="ct" style="color:var(--c2m)">Pref · ${listaNomi[1]}</span>${topP(d.p2,1,'var(--c2)')}</div>
     </div>
     <div class="card">
-      <div class="sr"><span class="srl">Bianche</span><span class="srv">${fn(d.bianche)}</span></div>
-      <div class="sr"><span class="srl">Nulle</span><span class="srv">${fn(d.nulle)}</span></div>
-      ${num(d.vd)>0?`<div class="sr"><span class="srl">Voti disgiunti</span><span class="srv" style="color:var(--am)">${fn(d.vd)}</span></div>`:''}
       <div class="sr">
         <span class="srl">Sync server</span>
         <span style="font-size:12px;color:var(--tx3);display:flex;align-items:center;gap:5px">
@@ -852,19 +888,30 @@ async function toggleDone(){
   renSez();
 }
 
-/* ══ BALLOT ═════════════════════════════════════════════════ */
-function showBallot(){view='ballot';bData={tipo:null,sindaco:null,lista:null,prefs:[]};renBallot()}
+/* ══ BALLOT — 5 STEP ════════════════════════════════════════
+   Step 1: tipo (valida/bianca/nulla)
+   Step 2: voto sindaco (cand 1 / cand 2 / nessuno)
+   Step 3: voto lista simbolo (L1 / L2 / nessuna)
+   Step 4: lista delle preferenze (da quale scegliere candidati)
+   Step 5: preferenze candidati (max 2 con regola genere)
+═══════════════════════════════════════════════════════════ */
+function showBallot(){
+  view='ballot';
+  bData={tipo:null,sindaco:null,lista:null,listaPref:null,prefs:[]};
+  renBallot();
+}
 function backToSez(){view='sez';renSez()}
 
 function renBallot(){
   const d=bData;
-  const ci=d.lista===1?0:d.lista===2?1:null;
+  const ci=d.listaPref===1?0:d.listaPref===2?1:null;
   const showS=d.tipo==='valida';
-  const showL=showS&&d.sindaco!==null;
-  const showP=showL&&d.lista!==null;
-  const isDis=d.sindaco!==null&&d.lista!==null&&d.sindaco!==d.lista;
+  const showL=showS && d.sindaco!==null;
+  const showLP=showL && d.lista!==null;
+  const showP=showLP && (d.listaPref===1||d.listaPref===2);
+  const isDis=d.tipo==='valida' && (d.sindaco===1||d.sindaco===2) && (d.lista===1||d.lista===2) && d.sindaco!==d.lista;
   const gErr=showP&&ci!==null?genderErr(d.prefs,CANDS[ci]):null;
-  const canConf=d.tipo==='bianca'||d.tipo==='nulla'||(showP&&!gErr);
+  const canConf=d.tipo==='bianca'||d.tipo==='nulla'||(showS && d.sindaco!==null && d.lista!==null && d.listaPref!==null && !gErr);
   const schN=num(fd.votanti)+1;
 
   let prefHTML='';
@@ -902,7 +949,7 @@ function renBallot(){
 
     ${showS?`
     <div class="sdiv"></div>
-    <p class="sl" data-n="2">Candidato Sindaco</p>
+    <p class="sl" data-n="2">Voto al candidato sindaco</p>
     <div class="cpg">
       <button class="cpb cc1${d.sindaco===1?' sel':''}" onclick="selSindaco(1)">
         <div class="cpl">${listaNomi[0]}</div><div class="cpn">${C1.nome}</div>
@@ -910,28 +957,47 @@ function renBallot(){
       <button class="cpb cc2${d.sindaco===2?' sel':''}" onclick="selSindaco(2)">
         <div class="cpl">${listaNomi[1]}</div><div class="cpn">${C2.nome}</div>
       </button>
-    </div>`:''}
+    </div>
+    <button class="btn${d.sindaco==='nessuno'?' bp':''}" style="width:100%;padding:9px;font-size:12px;margin-bottom:1rem" onclick="selSindaco('nessuno')">
+      Nessun voto al sindaco
+    </button>`:''}
 
     ${showL?`
     <div class="sdiv"></div>
-    <p class="sl" data-n="3">Lista per le preferenze
-      <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">— può differire dal sindaco</span>
-    </p>
+    <p class="sl" data-n="3">Voto alla lista (simbolo barrato)</p>
     <div class="cpg">
       <button class="cpb cc1${d.lista===1?' sel':''}" onclick="selLista(1)">
-        <div class="cpl">${listaNomi[0]}</div>
-        <div class="cpn" style="font-size:12px">${d.sindaco===1?'stesso sindaco':'▲ voto disgiunto'}</div>
+        <div class="cpl">Voto lista</div><div class="cpn">${listaNomi[0]}</div>
       </button>
       <button class="cpb cc2${d.lista===2?' sel':''}" onclick="selLista(2)">
-        <div class="cpl">${listaNomi[1]}</div>
-        <div class="cpn" style="font-size:12px">${d.sindaco===2?'stesso sindaco':'▲ voto disgiunto'}</div>
+        <div class="cpl">Voto lista</div><div class="cpn">${listaNomi[1]}</div>
       </button>
     </div>
-    ${isDis?'<div class="no nwa" style="margin-top:-6px">Voto disgiunto: sindaco di una lista, preferenze dell\'altra lista</div>':''}`:''}
+    <button class="btn${d.lista==='nessuna'?' bp':''}" style="width:100%;padding:9px;font-size:12px;margin-bottom:1rem" onclick="selLista('nessuna')">
+      Nessun simbolo lista barrato
+    </button>
+    ${isDis?'<div class="no nwa" style="margin-top:-6px;margin-bottom:10px">Voto disgiunto: sindaco e lista di schieramenti diversi</div>':''}`:''}
+
+    ${showLP?`
+    <div class="sdiv"></div>
+    <p class="sl" data-n="4">Lista delle preferenze
+      <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">— le preferenze di un'altra lista sono nulle</span>
+    </p>
+    <div class="cpg">
+      <button class="cpb cc1${d.listaPref===1?' sel':''}" onclick="selListaPref(1)">
+        <div class="cpl">Preferenze da</div><div class="cpn">${listaNomi[0]}</div>
+      </button>
+      <button class="cpb cc2${d.listaPref===2?' sel':''}" onclick="selListaPref(2)">
+        <div class="cpl">Preferenze da</div><div class="cpn">${listaNomi[1]}</div>
+      </button>
+    </div>
+    <button class="btn${d.listaPref==='nessuna'?' bp':''}" style="width:100%;padding:9px;font-size:12px;margin-bottom:1rem" onclick="selListaPref('nessuna')">
+      Nessuna preferenza espressa
+    </button>`:''}
 
     ${showP?`
     <div class="sdiv"></div>
-    <p class="sl" data-n="4">Preferenze consiglieri
+    <p class="sl" data-n="5">Preferenze consiglieri
       <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">opzionali · ${d.prefs.length}/${MPREF}</span>
     </p>
     <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;display:flex;align-items:center;gap:6px">
@@ -944,15 +1010,20 @@ function renBallot(){
 
     <div style="margin-top:${showP?'4px':'1rem'}">
       ${canConf
-        ?`<button class="btn bg bw blg" onclick="confirmBallot()">Conferma scheda #${schN}</button>`
-        :`<button class="btn bw blg" disabled>Seleziona il tipo per continuare</button>`}
+        ?`<button class="btn bp bw blg" onclick="confirmBallot()">Conferma scheda #${schN}</button>`
+        :`<button class="btn bw blg" disabled>Completa gli step richiesti</button>`}
     </div>
   `;
 }
 
-function selTipo(t){bData.tipo=t;if(t!=='valida'){bData.sindaco=null;bData.lista=null;bData.prefs=[];}renBallot()}
-function selSindaco(s){bData.sindaco=s;bData.lista=s;bData.prefs=[];renBallot()}
-function selLista(l){bData.lista=l;bData.prefs=[];renBallot()}
+function selTipo(t){
+  bData.tipo=t;
+  if(t!=='valida'){bData.sindaco=null;bData.lista=null;bData.listaPref=null;bData.prefs=[];}
+  renBallot();
+}
+function selSindaco(s){bData.sindaco=s;renBallot();}
+function selLista(l){bData.lista=l;renBallot();}
+function selListaPref(l){bData.listaPref=l;bData.prefs=[];renBallot();}
 function togPref(j){
   const i=bData.prefs.indexOf(j);
   if(i>=0)bData.prefs.splice(i,1);
@@ -961,11 +1032,10 @@ function togPref(j){
 }
 
 async function confirmBallot(){
-  // Mostra popup di riepilogo PRIMA di salvare definitivamente
   const d=bData;
   const schN=num(fd.votanti)+1;
-  const ci=d.lista===1?0:d.lista===2?1:null;
-  const isDisgiunto=d.tipo==='valida'&&d.sindaco!==null&&d.lista!==null&&d.sindaco!==d.lista;
+  const ci=d.listaPref===1?0:d.listaPref===2?1:null;
+  const isDisgiunto=d.tipo==='valida' && (d.sindaco===1||d.sindaco===2) && (d.lista===1||d.lista===2) && d.sindaco!==d.lista;
 
   let riepilogoHTML='';
   if(d.tipo==='bianca'){
@@ -979,36 +1049,70 @@ async function confirmBallot(){
       <p style="font-size:16px;font-weight:600">Scheda Nulla</p>
     </div>`;
   }else{
-    const nomeSind=d.sindaco===1?C1.nome:C2.nome;
-    const listaSind=d.sindaco===1?listaNomi[0]:listaNomi[1];
-    const nomeLista=d.lista===1?listaNomi[0]:listaNomi[1];
-    const colSind=d.sindaco===1?'var(--c1)':'var(--c2)';
-    const colLista=d.lista===1?'var(--c1)':'var(--c2)';
-    const bgSind=d.sindaco===1?'var(--c1l)':'var(--c2l)';
-    const bgLista=d.lista===1?'var(--c1l)':'var(--c2l)';
-
-    const prefList=d.prefs.length>0
-      ? d.prefs.map((j,i)=>{
-          const c=CANDS[ci][j];
-          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:${bgLista};border-radius:6px;margin-bottom:4px">
-            <span style="min-width:20px;height:20px;border-radius:50%;background:${colLista};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">${i+1}</span>
-            <span style="font-size:13px;flex:1">${c.nome}</span>
-            ${gB(c.genere)}
-          </div>`;
-        }).join('')
-      : '<p style="font-size:12px;color:var(--tx3);padding:4px 0">Nessuna preferenza</p>';
-
-    riepilogoHTML=`
-      <div style="background:${bgSind};padding:12px 14px;border-radius:var(--rs);margin-bottom:10px">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${colSind};margin-bottom:3px;font-weight:600">Sindaco · ${listaSind}</p>
-        <p style="font-size:15px;font-weight:600;color:${colSind}">${nomeSind}</p>
-      </div>
-      ${isDisgiunto?`<div class="no nwa" style="margin-bottom:10px;font-size:12px">⚠ Voto disgiunto: preferenze per lista diversa</div>`:''}
-      <div style="background:${bgLista};padding:12px 14px;border-radius:var(--rs);margin-bottom:10px">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${colLista};margin-bottom:6px;font-weight:600">Preferenze · ${nomeLista}</p>
+    // Box sindaco
+    let sindBox='';
+    if(d.sindaco===1||d.sindaco===2){
+      const idx=d.sindaco-1;
+      const nome=idx===0?C1.nome:C2.nome;
+      const lista=listaNomi[idx];
+      const col=idx===0?'var(--c1)':'var(--c2)';
+      const bg=idx===0?'var(--c1l)':'var(--c2l)';
+      sindBox=`<div style="background:${bg};padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${col};margin-bottom:2px;font-weight:600">Sindaco · ${lista}</p>
+        <p style="font-size:14px;font-weight:600;color:${col}">${nome}</p>
+      </div>`;
+    }else{
+      sindBox=`<div style="background:var(--sf2);padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px;font-weight:600">Sindaco</p>
+        <p style="font-size:13px;color:var(--tx3)">Nessun voto</p>
+      </div>`;
+    }
+    // Box lista
+    let listaBox='';
+    if(d.lista===1||d.lista===2){
+      const idx=d.lista-1;
+      const nome=listaNomi[idx];
+      const col=idx===0?'var(--c1)':'var(--c2)';
+      const bg=idx===0?'var(--c1l)':'var(--c2l)';
+      listaBox=`<div style="background:${bg};padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${col};margin-bottom:2px;font-weight:600">Voto Lista</p>
+        <p style="font-size:14px;font-weight:600;color:${col}">${nome}</p>
+      </div>`;
+    }else{
+      listaBox=`<div style="background:var(--sf2);padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px;font-weight:600">Voto Lista</p>
+        <p style="font-size:13px;color:var(--tx3)">Nessun simbolo barrato</p>
+      </div>`;
+    }
+    // Box preferenze
+    let prefBox='';
+    if((d.listaPref===1||d.listaPref===2)&&ci!==null){
+      const idx=d.listaPref-1;
+      const nomeLista=listaNomi[idx];
+      const col=idx===0?'var(--c1)':'var(--c2)';
+      const bg=idx===0?'var(--c1l)':'var(--c2l)';
+      const prefList=d.prefs.length>0
+        ? d.prefs.map((j,i)=>{
+            const c=CANDS[ci][j];
+            return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--sf);border-radius:6px;margin-bottom:3px">
+              <span style="min-width:18px;height:18px;border-radius:50%;background:${col};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">${i+1}</span>
+              <span style="font-size:12px;flex:1">${c.nome}</span>
+              ${gB(c.genere)}
+            </div>`;
+          }).join('')
+        : '<p style="font-size:11px;color:var(--tx3);padding:2px 0">Nessuna preferenza espressa</p>';
+      prefBox=`<div style="background:${bg};padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${col};margin-bottom:5px;font-weight:600">Preferenze · ${nomeLista}</p>
         ${prefList}
-      </div>
-    `;
+      </div>`;
+    }else{
+      prefBox=`<div style="background:var(--sf2);padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px;font-weight:600">Preferenze</p>
+        <p style="font-size:13px;color:var(--tx3)">Nessuna preferenza</p>
+      </div>`;
+    }
+    riepilogoHTML=sindBox+listaBox+prefBox
+      +(isDisgiunto?`<div class="no nwa" style="margin-bottom:8px;font-size:12px">⚠ Voto disgiunto: sindaco e lista di schieramenti diversi</div>`:'');
   }
 
   showModal(`
@@ -1025,7 +1129,6 @@ async function confirmBallot(){
   `);
 }
 
-// Effettivo salvataggio (chiamato DOPO la conferma del popup)
 async function doSaveBallot(){
   closeModal();
   const d=bData;
@@ -1033,49 +1136,180 @@ async function doSaveBallot(){
   if(d.tipo==='bianca')fd.bianche=(fd.bianche||0)+1;
   else if(d.tipo==='nulla')fd.nulle=(fd.nulle||0)+1;
   else{
-    if(d.sindaco===1)fd.vc1=(fd.vc1||0)+1;else fd.vc2=(fd.vc2||0)+1;
-    if(d.sindaco!==d.lista){
+    // Voto sindaco
+    if(d.sindaco===1)fd.vc1=(fd.vc1||0)+1;
+    else if(d.sindaco===2)fd.vc2=(fd.vc2||0)+1;
+    // Voto lista (separato dal sindaco!)
+    if(d.lista===1)fd.vl1=(fd.vl1||0)+1;
+    else if(d.lista===2)fd.vl2=(fd.vl2||0)+1;
+    // Disgiunto
+    if((d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista){
       fd.vd=(fd.vd||0)+1;
-      if(d.sindaco===1)fd.vd12=(fd.vd12||0)+1;else fd.vd21=(fd.vd21||0)+1;
+      if(d.sindaco===1)fd.vd12=(fd.vd12||0)+1;
+      else fd.vd21=(fd.vd21||0)+1;
     }
-    const pk=d.lista===1?'p1':'p2';
-    if(!fd[pk])fd[pk]={};
-    d.prefs.forEach(j=>{fd[pk][j]=(fd[pk][j]||0)+1});
+    // Preferenze (solo se listaPref valida)
+    if(d.listaPref===1||d.listaPref===2){
+      const pk=d.listaPref===1?'p1':'p2';
+      if(!fd[pk])fd[pk]={};
+      d.prefs.forEach(j=>{fd[pk][j]=(fd[pk][j]||0)+1});
+    }
   }
-  lastBallot=JSON.parse(JSON.stringify(d));
+  // Storico ultime 10 schede (per undo esteso e annullamento ex-post)
+  if(!fd.lastBallots)fd.lastBallots=[];
+  fd.lastBallots.push({
+    num:fd.votanti,
+    ts:new Date().toISOString(),
+    data:JSON.parse(JSON.stringify(d))
+  });
+  if(fd.lastBallots.length>10)fd.lastBallots.shift();
+
   fd.upd=new Date().toISOString();
   allData[selSez]=fd;cacheSave();
   await fbSaveSez(selSez,fd);
-  fbLogEvent({tipo:'scheda',sezione:selSez,tipoScheda:d.tipo,sindaco:d.sindaco,lista:d.lista,nPrefs:d.prefs.length,disgiunto:d.sindaco!==d.lista});
+  fbLogEvent({tipo:'scheda',sezione:selSez,numScheda:fd.votanti,tipoScheda:d.tipo,sindaco:d.sindaco,lista:d.lista,listaPref:d.listaPref,nPrefs:d.prefs.length,disgiunto:(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista});
   view='sez';renSez();
   setTimeout(()=>{
     const m=$('sez-msg');
     if(m){
-      m.innerHTML=`<div class="no nok">Scheda #${num(fd.votanti)} salvata sul server${d.sindaco!==d.lista&&d.tipo==='valida'?' · voto disgiunto':''}</div>`;
+      const isD=(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista;
+      m.innerHTML=`<div class="no nok">Scheda #${num(fd.votanti)} salvata sul server${isD?' · voto disgiunto':''}</div>`;
       setTimeout(()=>{if(m)m.innerHTML=''},2800);
     }
   },30);
 }
 
+// Undo: annulla l'ultima scheda dallo storico
 async function undoLast(){
-  if(!lastBallot)return;const d=lastBallot;
+  if(!fd.lastBallots||fd.lastBallots.length===0)return;
+  const last=fd.lastBallots.pop();
+  const d=last.data;
   fd.votanti=Math.max(0,(fd.votanti||0)-1);
   if(d.tipo==='bianca')fd.bianche=Math.max(0,(fd.bianche||0)-1);
   else if(d.tipo==='nulla')fd.nulle=Math.max(0,(fd.nulle||0)-1);
   else{
-    if(d.sindaco===1)fd.vc1=Math.max(0,(fd.vc1||0)-1);else fd.vc2=Math.max(0,(fd.vc2||0)-1);
-    if(d.sindaco!==d.lista){
+    if(d.sindaco===1)fd.vc1=Math.max(0,(fd.vc1||0)-1);
+    else if(d.sindaco===2)fd.vc2=Math.max(0,(fd.vc2||0)-1);
+    if(d.lista===1)fd.vl1=Math.max(0,(fd.vl1||0)-1);
+    else if(d.lista===2)fd.vl2=Math.max(0,(fd.vl2||0)-1);
+    if((d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista){
       fd.vd=Math.max(0,(fd.vd||0)-1);
-      if(d.sindaco===1)fd.vd12=Math.max(0,(fd.vd12||0)-1);else fd.vd21=Math.max(0,(fd.vd21||0)-1);
+      if(d.sindaco===1)fd.vd12=Math.max(0,(fd.vd12||0)-1);
+      else fd.vd21=Math.max(0,(fd.vd21||0)-1);
     }
-    const pk=d.lista===1?'p1':'p2';
-    if(fd[pk])d.prefs.forEach(j=>{if(fd[pk][j]!==undefined)fd[pk][j]=Math.max(0,fd[pk][j]-1)});
+    if(d.listaPref===1||d.listaPref===2){
+      const pk=d.listaPref===1?'p1':'p2';
+      if(fd[pk])d.prefs.forEach(j=>{if(fd[pk][j]!==undefined)fd[pk][j]=Math.max(0,fd[pk][j]-1)});
+    }
   }
-  lastBallot=null;fd.upd=new Date().toISOString();
+  fd.upd=new Date().toISOString();
   allData[selSez]=fd;cacheSave();
   await fbSaveSez(selSez,fd);
-  fbLogEvent({tipo:'undo',sezione:selSez});
+  fbLogEvent({tipo:'undo',sezione:selSez,numScheda:last.num});
   renSez();
+}
+
+// Annullamento ex-post: trasforma una scheda dello storico in NULLA
+async function annullaScheda(idx){
+  if(!fd.lastBallots||!fd.lastBallots[idx])return;
+  const sch=fd.lastBallots[idx];
+  const d=sch.data;
+  if(d._annullataEx){closeModal();return} // già annullata
+  if(d.tipo==='nulla'){closeModal();return} // già nulla di suo
+
+  // Sottrai i valori originali
+  if(d.tipo==='bianca')fd.bianche=Math.max(0,(fd.bianche||0)-1);
+  else{
+    if(d.sindaco===1)fd.vc1=Math.max(0,(fd.vc1||0)-1);
+    else if(d.sindaco===2)fd.vc2=Math.max(0,(fd.vc2||0)-1);
+    if(d.lista===1)fd.vl1=Math.max(0,(fd.vl1||0)-1);
+    else if(d.lista===2)fd.vl2=Math.max(0,(fd.vl2||0)-1);
+    if((d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista){
+      fd.vd=Math.max(0,(fd.vd||0)-1);
+      if(d.sindaco===1)fd.vd12=Math.max(0,(fd.vd12||0)-1);
+      else fd.vd21=Math.max(0,(fd.vd21||0)-1);
+    }
+    if(d.listaPref===1||d.listaPref===2){
+      const pk=d.listaPref===1?'p1':'p2';
+      if(fd[pk])d.prefs.forEach(j=>{if(fd[pk][j]!==undefined)fd[pk][j]=Math.max(0,fd[pk][j]-1)});
+    }
+  }
+  // Aggiungi alle nulle
+  fd.nulle=(fd.nulle||0)+1;
+  // Marca la scheda nello storico
+  fd.lastBallots[idx].data._annullataEx=true;
+  fd.lastBallots[idx].annullataTs=new Date().toISOString();
+  fd.lastBallots[idx].annullataBy=userRole;
+  fd.upd=new Date().toISOString();
+  allData[selSez]=fd;cacheSave();
+  await fbSaveSez(selSez,fd);
+  fbLogEvent({tipo:'annulla_ex_post',sezione:selSez,numScheda:sch.num,ruolo:userRole});
+  closeModal();renSez();
+  setTimeout(()=>{
+    const m=$('sez-msg');
+    if(m){m.innerHTML=`<div class="no nok">Scheda #${sch.num} annullata (convertita in NULLA)</div>`;setTimeout(()=>{if(m)m.innerHTML=''},3000)}
+  },30);
+}
+
+// Mostra elenco delle ultime 10 schede per annullamento ex-post
+function showStoricoSchede(){
+  if(!fd.lastBallots||fd.lastBallots.length===0){
+    showModal(`<div style="padding:1.5rem;text-align:center">
+      <p style="font-size:14px;color:var(--tx2);margin-bottom:16px">Nessuna scheda registrata ancora.</p>
+      <button class="btn bp bw" onclick="closeModal()">Chiudi</button>
+    </div>`);
+    return;
+  }
+  const rows=[...fd.lastBallots].reverse().map((sch,revIdx)=>{
+    const idx=fd.lastBallots.length-1-revIdx;
+    const d=sch.data;
+    const isAnnullata=d._annullataEx;
+    const tempo=ft(sch.ts);
+    let descr='';
+    if(d.tipo==='bianca')descr='<span style="color:var(--tx2)">Bianca ○</span>';
+    else if(d.tipo==='nulla')descr='<span style="color:#C44">Nulla ✕</span>';
+    else{
+      const sindNome=d.sindaco===1?C1.nome.split(' ')[1]:d.sindaco===2?C2.nome.split(' ')[1]:'—';
+      const listaNome=d.lista===1?'L1':d.lista===2?'L2':'—';
+      const prefCount=d.prefs?d.prefs.length:0;
+      descr=`S: ${sindNome} · L: ${listaNome} · ${prefCount} pref`;
+    }
+    const style=isAnnullata?'opacity:.5;text-decoration:line-through':'';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--bd);${style}">
+      <span style="min-width:28px;font-family:'DM Mono',monospace;font-size:11px;color:var(--tx3);font-weight:600">#${sch.num}</span>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:500">${descr}</div>
+        <div style="font-size:10px;color:var(--tx3);font-family:'DM Mono',monospace">${tempo}${isAnnullata?' · annullata':''}</div>
+      </div>
+      ${isAnnullata
+        ?'<span class="badge bwt" style="font-size:10px">annullata</span>'
+        :`<button class="btn bd2" style="font-size:11px;padding:6px 10px" onclick="confermaAnnulla(${idx})">Annulla</button>`}
+    </div>`;
+  }).join('');
+  showModal(`
+    <div style="padding:1.5rem 1.5rem 1rem">
+      <p style="font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:4px">Storico ultime schede — Sezione ${selSez}</p>
+      <p style="font-size:16px;font-weight:700;margin-bottom:12px">Annulla scheda ex-post</p>
+      <p style="font-size:12px;color:var(--tx2);line-height:1.5;margin-bottom:14px">Mostra le ultime ${fd.lastBallots.length} schede (max 10). L'annullamento converte la scheda in NULLA. L'azione è tracciata nel log eventi.</p>
+      <div style="max-height:50vh;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--rs);background:var(--sf2)">${rows}</div>
+      <button class="btn bw" style="margin-top:12px;padding:10px" onclick="closeModal()">Chiudi</button>
+    </div>
+  `);
+}
+
+function confermaAnnulla(idx){
+  const sch=fd.lastBallots[idx];
+  if(!sch)return;
+  showModal(`
+    <div style="padding:1.5rem;text-align:center">
+      <p style="font-size:15px;font-weight:600;margin-bottom:6px">Annullare la scheda #${sch.num}?</p>
+      <p style="font-size:12px;color:var(--tx2);margin-bottom:18px">La scheda sarà convertita in NULLA. I contatori sindaco/lista/preferenze saranno sottratti. Azione registrata nel log.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn" onclick="showStoricoSchede()">← Indietro</button>
+        <button class="btn bd2" onclick="annullaScheda(${idx})">✕ Annulla scheda</button>
+      </div>
+    </div>
+  `);
 }
 
 /* ══ ADMIN — CANDIDATI E LISTE ══════════════════════════════ */
@@ -1157,13 +1391,16 @@ function showDash(){
 }
 function tblRows(d){
   return Array.from({length:N},(_,i)=>{
-    const s=d[i+1]||defSez(),el=EL[i],tv=num(s.vc1)+num(s.vc2);
+    const s=d[i+1]||defSez(),el=EL[i],tv=num(s.vc1)+num(s.vc2),tvl=num(s.vl1)+num(s.vl2);
     const af=el>0?(num(s.votanti)/el*100).toFixed(1):'0.0';
-    const p1=tv>0?(num(s.vc1)/tv*100).toFixed(1):'—',p2=tv>0?(num(s.vc2)/tv*100).toFixed(1):'—';
+    const ps1=tv>0?(num(s.vc1)/tv*100).toFixed(1):'—',ps2=tv>0?(num(s.vc2)/tv*100).toFixed(1):'—';
+    const pl1=tvl>0?(num(s.vl1)/tvl*100).toFixed(1):'—',pl2=tvl>0?(num(s.vl2)/tvl*100).toFixed(1):'—';
     const bg=s.done?`<span class="badge bok">Completa</span>`:s.upd?`<span class="badge bwip">${ft(s.upd)}</span>`:`<span class="badge bwt">Attesa</span>`;
     return`<tr><td style="font-weight:600">${i+1}</td><td>${fn(s.votanti)}</td>
-      <td style="color:var(--c1)">${fn(s.vc1)} <small style="color:var(--tx3)">${tv>0?'('+p1+'%)':''}</small></td>
-      <td style="color:var(--c2)">${fn(s.vc2)} <small style="color:var(--tx3)">${tv>0?'('+p2+'%)':''}</small></td>
+      <td style="color:var(--c1)">${fn(s.vc1)} <small style="color:var(--tx3)">${tv>0?'('+ps1+'%)':''}</small></td>
+      <td style="color:var(--c2)">${fn(s.vc2)} <small style="color:var(--tx3)">${tv>0?'('+ps2+'%)':''}</small></td>
+      <td style="color:var(--c1);background:var(--c1l)">${fn(s.vl1)} <small style="color:var(--tx3)">${tvl>0?'('+pl1+'%)':''}</small></td>
+      <td style="color:var(--c2);background:var(--c2l)">${fn(s.vl2)} <small style="color:var(--tx3)">${tvl>0?'('+pl2+'%)':''}</small></td>
       <td>${af}%</td><td>${num(s.vd)>0?`<span style="color:var(--am)">${fn(s.vd)}</span>`:'—'}</td><td>${bg}</td></tr>`;
   }).join('');
 }
@@ -1180,35 +1417,50 @@ function renDash(){
     </div>
     <div class="kg">
       <div class="kpi"><div class="kl">Affluenza</div><div class="kv" id="d-aff" style="color:var(--c1)">${pct(t.aff)}</div><div class="ks">${fn(t.vt)} / ${fn(t.el)}</div></div>
-      <div class="kpi"><div class="kl">Voti validi</div><div class="kv" id="d-vv">${fn(t.tv)}</div><div class="ks" id="d-bnu">${fn(t.bi)} bianche · ${fn(t.nu)} nulle</div></div>
-      <div class="kpi"><div class="kl">Sezioni</div><div class="kv" id="d-sez">${done}<span style="font-size:14px;font-weight:400;color:var(--tx3)"> /${N}</span></div><div class="ks">${fn(t.vd)} disgiunti</div></div>
+      <div class="kpi"><div class="kl">Voti sindaco / lista</div><div class="kv" id="d-vv" style="font-size:18px">${fn(t.tv)} <span style="color:var(--tx3)">·</span> ${fn(t.tvl)}</div><div class="ks" id="d-bnu">${fn(t.bi)} bianche · ${fn(t.nu)} nulle</div></div>
+      <div class="kpi"><div class="kl">Sezioni · Disgiunti</div><div class="kv" id="d-sez">${done}<span style="font-size:14px;font-weight:400;color:var(--tx3)"> /${N}</span></div><div class="ks">${fn(t.vd)} schede disgiunte</div></div>
     </div>
+    <p class="ct" style="margin-top:1rem;margin-bottom:8px">voti candidati sindaco</p>
     <div class="cg">
-      <div class="cb cb1"><div class="cl2">${listaNomi[0]}</div><div class="cn">${C1.nome}</div><div class="cv" id="d-vc1">${fn(t.vc1)}</div><div class="cp" id="d-pc1">${pct(t.pc1)} dei validi</div><div class="pt"><div class="pf" id="d-b1" style="background:var(--c1);width:${pct(t.pc1)}"></div></div></div>
-      <div class="cb cb2"><div class="cl2">${listaNomi[1]}</div><div class="cn">${C2.nome}</div><div class="cv" id="d-vc2">${fn(t.vc2)}</div><div class="cp" id="d-pc2">${pct(t.pc2)} dei validi</div><div class="pt"><div class="pf" id="d-b2" style="background:var(--c2);width:${pct(t.pc2)}"></div></div></div>
+      <div class="cb cb1"><div class="cl2">SINDACO</div><div class="cn">${C1.nome}</div><div class="cv" id="d-vc1">${fn(t.vc1)}</div><div class="cp" id="d-pc1">${pct(t.pc1)} dei sindaci</div><div class="pt"><div class="pf" id="d-b1" style="background:var(--c1);width:${pct(t.pc1)}"></div></div></div>
+      <div class="cb cb2"><div class="cl2">SINDACO</div><div class="cn">${C2.nome}</div><div class="cv" id="d-vc2">${fn(t.vc2)}</div><div class="cp" id="d-pc2">${pct(t.pc2)} dei sindaci</div><div class="pt"><div class="pf" id="d-b2" style="background:var(--c2);width:${pct(t.pc2)}"></div></div></div>
     </div>
-    ${t.vd>0?`<div class="no nwa" style="margin-bottom:10px">Voti disgiunti totali: <strong>${fn(t.vd)}</strong></div>`:''}
+    <p class="ct" style="margin-top:1rem;margin-bottom:8px">voti di lista</p>
+    <div class="cg">
+      <div class="cb cb1"><div class="cl2">LISTA</div><div class="cn">${listaNomi[0]}</div><div class="cv" id="d-vl1">${fn(t.vl1)}</div><div class="cp" id="d-pl1">${pct(t.pl1)} delle liste</div><div class="pt"><div class="pf" id="d-bl1" style="background:var(--c1);width:${pct(t.pl1)}"></div></div></div>
+      <div class="cb cb2"><div class="cl2">LISTA</div><div class="cn">${listaNomi[1]}</div><div class="cv" id="d-vl2">${fn(t.vl2)}</div><div class="cp" id="d-pl2">${pct(t.pl2)} delle liste</div><div class="pt"><div class="pf" id="d-bl2" style="background:var(--c2);width:${pct(t.pl2)}"></div></div></div>
+    </div>
+    ${t.vd>0?`<div class="no nwa" style="margin-bottom:10px;margin-top:10px">Voti disgiunti totali: <strong>${fn(t.vd)}</strong></div>`:'<div style="height:6px"></div>'}
 
     <div class="card">
       <span class="ct">🏛️ proiezione consiglio comunale — ${COMUNE}</span>
       <div id="proj-content"></div>
     </div>
 
-    <div class="card"><span class="ct">confronto per sezione</span><canvas id="ch-sez" height="120"></canvas></div>
+    <div class="card"><span class="ct">confronto sindaci per sezione</span><canvas id="ch-sez" height="120"></canvas></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="card" style="margin:0"><span class="ct" style="color:var(--c1m)">preferenze — ${listaNomi[0]}</span><canvas id="ch-p1" height="200"></canvas></div>
       <div class="card" style="margin:0"><span class="ct" style="color:var(--c2m)">preferenze — ${listaNomi[1]}</span><canvas id="ch-p2" height="200"></canvas></div>
     </div>
     <div class="card"><span class="ct">dettaglio sezioni</span>
-      <table class="tbl">
-        <thead><tr><th>Sez.</th><th>Votanti</th><th style="color:var(--c1m)">${C1.nome.split(' ')[1]}</th><th style="color:var(--c2m)">${C2.nome.split(' ')[1]}</th><th>Aff.%</th><th style="color:var(--am)">Disg.</th><th>Stato</th></tr></thead>
-        <tbody id="d-tb">${tblRows(allData)}</tbody>
-      </table>
+      <div style="overflow-x:auto">
+        <table class="tbl" style="min-width:780px">
+          <thead><tr>
+            <th>Sez.</th><th>Votanti</th>
+            <th style="color:var(--c1m)">Sind ${C1.nome.split(' ').slice(-1)[0]}</th>
+            <th style="color:var(--c2m)">Sind ${C2.nome.split(' ').slice(-1)[0]}</th>
+            <th style="color:var(--c1m)">Lista 1</th>
+            <th style="color:var(--c2m)">Lista 2</th>
+            <th>Aff.%</th><th style="color:var(--am)">Disg.</th><th>Stato</th>
+          </tr></thead>
+          <tbody id="d-tb">${tblRows(allData)}</tbody>
+        </table>
+      </div>
     </div>
-    <div class="io" style="margin-top:8px">
+    ${userRole==='coord'?`<div class="io" style="margin-top:8px">
       <button class="btn bg" onclick="exportCSV()">📊 Esporta CSV</button>
       <button class="btn" onclick="exportJSON()">📥 JSON</button>
-    </div>
+    </div>`:''}
   `;
   startClock();initCharts();
 }
@@ -1233,11 +1485,23 @@ function updDash(){
   if(view!=='dash')return;
   const t=totals(allData),done=Object.values(allData).filter(d=>d.done).length;
   const set=(id,v)=>{const e=$(id);if(e)e.textContent=v};const setH=(id,v)=>{const e=$(id);if(e)e.innerHTML=v};
-  set('d-aff',pct(t.aff));set('d-vv',fn(t.tv));set('d-bnu',fn(t.bi)+' bianche · '+fn(t.nu)+' nulle');
+  set('d-aff',pct(t.aff));
+  setH('d-vv',`${fn(t.tv)} <span style="color:var(--tx3)">·</span> ${fn(t.tvl)}`);
+  set('d-bnu',fn(t.bi)+' bianche · '+fn(t.nu)+' nulle');
   setH('d-sez',`${done}<span style="font-size:14px;font-weight:400;color:var(--tx3)"> /${N}</span>`);
-  set('d-vc1',fn(t.vc1));set('d-pc1',pct(t.pc1)+' dei validi');set('d-vc2',fn(t.vc2));set('d-pc2',pct(t.pc2)+' dei validi');
-  const b1=$('d-b1');if(b1)b1.style.width=pct(t.pc1);const b2=$('d-b2');if(b2)b2.style.width=pct(t.pc2);
+  // KPI sindaco
+  set('d-vc1',fn(t.vc1));set('d-pc1',pct(t.pc1)+' dei sindaci');
+  set('d-vc2',fn(t.vc2));set('d-pc2',pct(t.pc2)+' dei sindaci');
+  const b1=$('d-b1');if(b1)b1.style.width=pct(t.pc1);
+  const b2=$('d-b2');if(b2)b2.style.width=pct(t.pc2);
+  // KPI lista
+  set('d-vl1',fn(t.vl1));set('d-pl1',pct(t.pl1)+' delle liste');
+  set('d-vl2',fn(t.vl2));set('d-pl2',pct(t.pl2)+' delle liste');
+  const bl1=$('d-bl1');if(bl1)bl1.style.width=pct(t.pl1);
+  const bl2=$('d-bl2');if(bl2)bl2.style.width=pct(t.pl2);
+  // Tabella sezioni
   const tb=$('d-tb');if(tb)tb.innerHTML=tblRows(allData);
+  // Grafici
   if(charts.sz){charts.sz.data.datasets[0].data=Array.from({length:N},(_,i)=>num((allData[i+1]||defSez()).vc1));charts.sz.data.datasets[1].data=Array.from({length:N},(_,i)=>num((allData[i+1]||defSez()).vc2));charts.sz.update('none')}
   const upd=(ch,cands,pk)=>{
     if(!ch)return;
@@ -1253,12 +1517,12 @@ function startClock(){clearInterval(clockI);const f=()=>{const e=$('live-clk');i
 /* ══ RENDER CONTENUTO PROIEZIONE CONSIGLIO ═════════════════ */
 function renderProiezioneContent(){
   const proj=calcolaProiezione();
-  const {isPareggio,vincenteIdx,perdenteIdx}=proj;
+  const {isPareggioSindaco,isPareggioLista,sindacoVincIdx,sindacoPerdIdx,listaVincIdx,sindacoInMinoranza,seggiLista1Cons,seggiLista2Cons}=proj;
 
-  // Soglie elezione: lista vincente=8, lista perdente=3 (+sindaco sconfitto di diritto)
+  // Soglia consiglieri per lista
   const sogliaLista=(idx)=>{
-    if(isPareggio)return null;
-    return idx===vincenteIdx ? 8 : 3;
+    if(isPareggioLista)return null;
+    return idx===0 ? seggiLista1Cons : seggiLista2Cons;
   };
 
   const renderClassifica=(classifica,idx)=>{
@@ -1267,13 +1531,12 @@ function renderProiezioneContent(){
     const colDk=idx===0?'var(--c1t)':'var(--c2t)';
     const colBg=idx===0?'var(--c1l)':'var(--c2l)';
     const bgCol=idx===0?'#1B5299':'#B84020';
-    const isVinc=!isPareggio && idx===vincenteIdx;
-    const isPerd=!isPareggio && idx===perdenteIdx;
+    const isSindVinc=!isPareggioSindaco && idx===sindacoVincIdx;
+    const isSindPerd=!isPareggioSindaco && idx===sindacoPerdIdx;
 
-    // Box candidato sindaco
     const nomeSind=idx===0?C1.nome:C2.nome;
     let sindHTML='';
-    if(isVinc){
+    if(isSindVinc){
       sindHTML=`<div style="padding:10px 12px;background:${bgCol};color:#fff;border-radius:var(--rs);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:14px">★</span>
         <div style="flex:1">
@@ -1282,18 +1545,17 @@ function renderProiezioneContent(){
         </div>
         <span class="badge" style="background:rgba(255,255,255,.25);color:#fff">ELETTO</span>
       </div>`;
-    }else if(isPerd){
+    }else if(isSindPerd){
       sindHTML=`<div style="padding:10px 12px;background:${colBg};border:1px solid ${bgCol};border-radius:var(--rs);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:14px;color:${colMid}">◆</span>
         <div style="flex:1">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${colMid}">Consigliere di diritto</div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${colMid}">Consigliere di diritto (sindaco sconfitto)</div>
           <div style="font-size:14px;font-weight:700;color:${colDk}">${nomeSind}</div>
         </div>
         <span class="badge bok">ELETTO</span>
       </div>`;
     }
 
-    // Classifica candidati
     const rows=classifica.map((c,pos)=>{
       const isEletto=soglia!==null && pos<soglia;
       const style=isEletto
@@ -1311,41 +1573,43 @@ function renderProiezioneContent(){
       </div>`;
     }).join('');
 
-    // Linea soglia visiva tra ultimo eletto e primo non eletto
-    let rowsWithSoglia=rows;
-    if(soglia!==null && soglia>0 && soglia<classifica.length){
-      // Non più necessario: lo stile si differenzia già visivamente
-    }
+    const seggiLabel=soglia===null?'—':`${soglia} consiglieri${isSindVinc||isSindPerd?' + 1 sindaco':''}`;
 
     return `
       <div class="card" style="margin:0;padding:14px 16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <span style="font-size:11px;text-transform:uppercase;letter-spacing:.7px;font-weight:600;color:${colMid}">${listaNomi[idx]}</span>
-          <span class="badge" style="background:${colBg};color:${colDk};font-weight:700">${isVinc?'8+1 seggi':isPerd?'3+1 seggi':'—'}</span>
+          <span class="badge" style="background:${colBg};color:${colDk};font-weight:700">${seggiLabel}</span>
         </div>
         ${sindHTML}
         ${rows}
       </div>`;
   };
 
-  if(isPareggio){
+  if(isPareggioSindaco || isPareggioLista){
+    const msg=isPareggioSindaco?'Pareggio tra candidati sindaco':'Pareggio tra le liste';
     $('proj-content').innerHTML=`
       <div class="no nwa" style="margin-bottom:10px;text-align:center;padding:1.5rem">
-        <p style="font-size:14px;font-weight:600;margin-bottom:4px">⚖ Pareggio tra candidati sindaco</p>
-        <p style="font-size:12px">La proiezione si attiverà appena un candidato supererà l'altro</p>
+        <p style="font-size:14px;font-weight:600;margin-bottom:4px">⚖ ${msg}</p>
+        <p style="font-size:12px">La proiezione si attiverà appena uno schieramento prevarrà sull'altro</p>
       </div>
     `;
     return;
   }
 
+  const minoranzaAlert=sindacoInMinoranza
+    ?`<div class="no nwa" style="margin-bottom:10px;text-align:center"><strong>⚠ Sindaco in minoranza</strong> — Il sindaco vincente (${sindacoVincIdx===0?C1.nome:C2.nome}) appartiene a una lista che ha preso meno voti di lista. Sarà in minoranza in consiglio (${seggiLista1Cons===5?'5':'7'} vs ${seggiLista2Cons===5?'5':'7'} consiglieri).</div>`
+    :'';
+
   $('proj-content').innerHTML=`
+    ${minoranzaAlert}
     <div style="margin-bottom:16px">${renderParlamentino(proj)}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       ${renderClassifica(proj.classifica1,0)}
       ${renderClassifica(proj.classifica2,1)}
     </div>
     <p style="font-size:11px;color:var(--tx3);text-align:center;margin-top:10px;font-style:italic">
-      ★ Sindaco eletto (premio di maggioranza) · ◆ Consigliere di diritto (sindaco sconfitto) · ✓ Eletto per preferenze personali
+      ★ Sindaco eletto · ◆ Consigliere di diritto (sindaco sconfitto) · ✓ Eletto per preferenze personali · seggi consiglieri assegnati in base ai voti di LISTA
     </p>
   `;
 }
@@ -1521,17 +1785,28 @@ function exportCSV(){
   const rows=[];
   rows.push(['ELEZIONI COMUNALI — '+COMUNE,'Data: '+DATA_EL,'Generato: '+new Date().toLocaleString('it-IT')].join(','));
   rows.push('');rows.push('=== RIEPILOGO GENERALE ===');
-  rows.push(['Elettori totali',t.el,''].join(','));rows.push(['Votanti',t.vt,pct(t.aff)+' affluenza'].join(','));
+  rows.push(['Elettori totali',t.el,''].join(','));
+  rows.push(['Votanti',t.vt,pct(t.aff)+' affluenza'].join(','));
   rows.push(['Bianche',t.bi,''].join(','));rows.push(['Nulle',t.nu,''].join(','));
-  rows.push(['Voti validi sindaco',t.tv,''].join(','));rows.push(['Voti disgiunti',t.vd,''].join(','));
+  rows.push(['Voti validi sindaco',t.tv,''].join(','));
+  rows.push(['Voti validi lista',t.tvl,''].join(','));
+  rows.push(['Voti disgiunti',t.vd,''].join(','));
   rows.push('');rows.push('=== VOTI SINDACO ===');
   rows.push([q(C1.nome+' ('+listaNomi[0]+')'),t.vc1,pct(t.pc1)].join(','));
   rows.push([q(C2.nome+' ('+listaNomi[1]+')'),t.vc2,pct(t.pc2)].join(','));
+  rows.push('');rows.push('=== VOTI LISTA ===');
+  rows.push([q(listaNomi[0]),t.vl1,pct(t.pl1)].join(','));
+  rows.push([q(listaNomi[1]),t.vl2,pct(t.pl2)].join(','));
   rows.push('');rows.push('=== DETTAGLIO PER SEZIONE ===');
-  rows.push(['Sezione','Elettori','Votanti','Affluenza%','Bianche','Nulle',q(C1.nome),q(C2.nome),'Disgiunti','Stato'].join(','));
+  rows.push(['Sezione','Elettori','Votanti','Affluenza%','Bianche','Nulle',
+    q('Sind '+C1.nome),q('Sind '+C2.nome),
+    q('Lista '+listaNomi[0]),q('Lista '+listaNomi[1]),
+    'Disgiunti','Stato'].join(','));
   for(let i=1;i<=N;i++){
     const s=d[i]||defSez(),el=EL[i-1],af=el>0?(num(s.votanti)/el*100).toFixed(2):'0.00';
-    rows.push([i,el,num(s.votanti),af,num(s.bianche),num(s.nulle),num(s.vc1),num(s.vc2),num(s.vd),s.done?'Completata':s.upd?'Parziale':'Attesa'].join(','));
+    rows.push([i,el,num(s.votanti),af,num(s.bianche),num(s.nulle),
+      num(s.vc1),num(s.vc2),num(s.vl1),num(s.vl2),
+      num(s.vd),s.done?'Completata':s.upd?'Parziale':'Attesa'].join(','));
   }
   for(let li=0;li<2;li++){
     rows.push('');rows.push(`=== PREFERENZE LISTA ${listaNomi[li]} ===`);
@@ -1542,6 +1817,18 @@ function exportCSV(){
       const sv=Array.from({length:N},(_,i)=>num((d[i+1]||defSez())[pk]&&(d[i+1]||defSez())[pk][j]));
       rows.push([q(cand.nome),cand.genere||'M',sv.reduce((a,b)=>a+b,0),...sv].join(','));
     }
+  }
+  // Proiezione consiglio
+  const proj=calcolaProiezione();
+  if(!proj.isPareggioSindaco && !proj.isPareggioLista){
+    rows.push('');rows.push('=== PROIEZIONE CONSIGLIO COMUNALE ===');
+    rows.push(['Sindaco eletto',q(proj.sindacoVincIdx===0?C1.nome:C2.nome),''].join(','));
+    rows.push(['Lista vincente (per voti lista)',q(listaNomi[proj.listaVincIdx]),''].join(','));
+    if(proj.sindacoInMinoranza){
+      rows.push(['ATTENZIONE','Sindaco in minoranza in consiglio',''].join(','));
+    }
+    rows.push(['Seggi '+listaNomi[0],proj.seggiTotali1,'(consiglieri+sindaco)'].join(','));
+    rows.push(['Seggi '+listaNomi[1],proj.seggiTotali2,'(consiglieri+sindaco)'].join(','));
   }
   const csv='\uFEFF'+rows.join('\r\n');
   const a=document.createElement('a');
@@ -1578,6 +1865,8 @@ window.showListDash=showListDash;window.exportListCSV=exportListCSV;
 window.showBackups=showBackups;window.makeBackup=makeBackup;window.restoreBackup=restoreBackup;
 window.downloadBackup=downloadBackup;window.deleteBackup=deleteBackup;
 window.showModal=showModal;window.closeModal=closeModal;window.doSaveBallot=doSaveBallot;
+window.selListaPref=selListaPref;window.annullaScheda=annullaScheda;
+window.showStoricoSchede=showStoricoSchede;window.confermaAnnulla=confermaAnnulla;
 </script>
 </body>
 </html>
