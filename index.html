@@ -118,6 +118,9 @@ body{font-family:'DM Sans',sans-serif;background:#F5F3EE;color:#1A1A18;min-heigh
 .conn{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--gn);font-family:'DM Mono',monospace}
 .conn.off{color:#C44}
 @media(max-width:480px){.kg{grid-template-columns:1fr 1fr}.cg{grid-template-columns:1fr}.cpg{grid-template-columns:1fr}.pg{grid-template-columns:1fr}}
+/* ══ Modal overlay ═══════════════════════════════════════ */
+.mod-o{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem;animation:fin .2s}
+.mod-b{background:var(--sf);border-radius:var(--r);max-width:420px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 </style>
 </head>
 <body>
@@ -454,13 +457,13 @@ function defCands(){
     ],
     [
       {nome:'Giambrone Vincenzo',genere:'M'},
-      {nome:'Bongiovanni Domenica',genere:'F'},
-      {nome:'Lo Scrudato Enzo',genere:'M'},
+      {nome:'Bongiovanni Enza',genere:'F'},
+      {nome:'Lo Scrudato Vincenzo',genere:'M'},
       {nome:'Terramagra Ivana',genere:'F'},
       {nome:'Cigno Carmelo',genere:'M'},
-      {nome:'Pellitteri Maria Elisa',genere:'F'},
+      {nome:'Pellitteri Giusi Francesca',genere:'F'},
       {nome:'Bongiovanni Domenico',genere:'M'},
-      {nome:'Tuzzolino Nadia',genere:'F'},
+      {nome:'Tuzzolino Loredana',genere:'F'},
       {nome:'Mangiapane Gaetano',genere:'M'},
       {nome:'Giarratana Vanessa',genere:'F'},
       {nome:'Rappisi Carmelo',genere:'M'},
@@ -476,6 +479,39 @@ const pct = v=>v.toFixed(1)+'%';
 const fn  = v=>Math.round(num(v)).toLocaleString('it-IT');
 const ft  = iso=>iso?new Date(iso).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—';
 const gB  = g=>g==='F'?`<span class="gb gbf">F</span>`:`<span class="gb gbm">M</span>`;
+
+/* Estrae etichetta breve per grafici: "Cognome" se unico, "Cognome N." se duplicato
+   I cognomi composti (Lo Scrudato, La Mendola, De Maria, Mangiapane Maria) vengono gestiti:
+   prendiamo tutte le parole finché non iniziamo a vedere il nome.
+   Strategia semplice: "Cognome" = tutto tranne l'ultima parola che è il nome.
+   Se poi ci sono doppi, aggiungiamo l'iniziale del nome. */
+function extractCognome(full){
+  if(!full)return '';
+  const parts=full.trim().split(/\s+/);
+  if(parts.length===1)return parts[0];
+  // Cognome = tutte le parole tranne l'ultima
+  return parts.slice(0,-1).join(' ');
+}
+function extractNome(full){
+  if(!full)return '';
+  const parts=full.trim().split(/\s+/);
+  if(parts.length===1)return '';
+  return parts[parts.length-1];
+}
+function buildShortLabels(candList){
+  // Ritorna array di label brevi: "Cognome" o "Cognome I." se duplicato
+  const cogs=candList.map(c=>extractCognome(c.nome||''));
+  const counts={};
+  cogs.forEach(c=>{counts[c]=(counts[c]||0)+1});
+  return candList.map((c,i)=>{
+    const cog=cogs[i];
+    if(counts[cog]>1){
+      const nome=extractNome(c.nome||'');
+      return cog+(nome?' '+nome[0]+'.':'');
+    }
+    return cog;
+  });
+}
 
 /* Regola genere: 1 pref → libera (M o F); 2 pref → obbligatoriamente 1M + 1F */
 function genderErr(prefs,cands){
@@ -513,6 +549,22 @@ function totals(d){
 }
 function killCharts(){Object.values(charts).forEach(c=>c?.destroy());charts={}}
 function goHome(){clearInterval(clockI);killCharts();showHome()}
+
+/* ══ MODAL ═════════════════════════════════════════════════ */
+function showModal(contentHTML){
+  let el=$('app-modal');
+  if(!el){
+    el=document.createElement('div');
+    el.id='app-modal';
+    document.body.appendChild(el);
+  }
+  el.className='mod-o';
+  el.innerHTML=`<div class="mod-b">${contentHTML}</div>`;
+}
+function closeModal(){
+  const el=$('app-modal');
+  if(el){el.className='';el.innerHTML=''}
+}
 
 /* ══ LOGIN ══════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded',()=>{
@@ -595,7 +647,9 @@ function showHome(){
       <button class="btn" onclick="showAdmin()">⚙️ Candidati</button>
       <button class="btn" onclick="showBackups()">💾 Backup</button>
       <button class="btn bg" onclick="exportCSV()">📊 CSV</button>
-    </div>`:''}
+    </div>`:`
+    <button class="btn bp bw blg" style="margin-bottom:1.25rem" onclick="showDash()">📊  Dashboard Generale (solo lettura)</button>
+    `}
     <p class="ct" style="margin-bottom:10px">Sezioni elettorali</p>
     <div class="sg" style="margin-bottom:1.25rem">${btns}</div>
     ${userRole==='coord'?`
@@ -794,6 +848,73 @@ function togPref(j){
 }
 
 async function confirmBallot(){
+  // Mostra popup di riepilogo PRIMA di salvare definitivamente
+  const d=bData;
+  const schN=num(fd.votanti)+1;
+  const ci=d.lista===1?0:d.lista===2?1:null;
+  const isDisgiunto=d.tipo==='valida'&&d.sindaco!==null&&d.lista!==null&&d.sindaco!==d.lista;
+
+  let riepilogoHTML='';
+  if(d.tipo==='bianca'){
+    riepilogoHTML=`<div style="text-align:center;padding:1rem 0">
+      <div style="font-size:40px;margin-bottom:8px">○</div>
+      <p style="font-size:16px;font-weight:600">Scheda Bianca</p>
+    </div>`;
+  }else if(d.tipo==='nulla'){
+    riepilogoHTML=`<div style="text-align:center;padding:1rem 0">
+      <div style="font-size:40px;margin-bottom:8px;color:#C44">✕</div>
+      <p style="font-size:16px;font-weight:600">Scheda Nulla</p>
+    </div>`;
+  }else{
+    const nomeSind=d.sindaco===1?C1.nome:C2.nome;
+    const listaSind=d.sindaco===1?listaNomi[0]:listaNomi[1];
+    const nomeLista=d.lista===1?listaNomi[0]:listaNomi[1];
+    const colSind=d.sindaco===1?'var(--c1)':'var(--c2)';
+    const colLista=d.lista===1?'var(--c1)':'var(--c2)';
+    const bgSind=d.sindaco===1?'var(--c1l)':'var(--c2l)';
+    const bgLista=d.lista===1?'var(--c1l)':'var(--c2l)';
+
+    const prefList=d.prefs.length>0
+      ? d.prefs.map((j,i)=>{
+          const c=CANDS[ci][j];
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:${bgLista};border-radius:6px;margin-bottom:4px">
+            <span style="min-width:20px;height:20px;border-radius:50%;background:${colLista};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">${i+1}</span>
+            <span style="font-size:13px;flex:1">${c.nome}</span>
+            ${gB(c.genere)}
+          </div>`;
+        }).join('')
+      : '<p style="font-size:12px;color:var(--tx3);padding:4px 0">Nessuna preferenza</p>';
+
+    riepilogoHTML=`
+      <div style="background:${bgSind};padding:12px 14px;border-radius:var(--rs);margin-bottom:10px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${colSind};margin-bottom:3px;font-weight:600">Sindaco · ${listaSind}</p>
+        <p style="font-size:15px;font-weight:600;color:${colSind}">${nomeSind}</p>
+      </div>
+      ${isDisgiunto?`<div class="no nwa" style="margin-bottom:10px;font-size:12px">⚠ Voto disgiunto: preferenze per lista diversa</div>`:''}
+      <div style="background:${bgLista};padding:12px 14px;border-radius:var(--rs);margin-bottom:10px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${colLista};margin-bottom:6px;font-weight:600">Preferenze · ${nomeLista}</p>
+        ${prefList}
+      </div>
+    `;
+  }
+
+  showModal(`
+    <div style="padding:1.5rem 1.5rem 1rem">
+      <p style="font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:4px">Conferma scheda — Sezione ${selSez}</p>
+      <p style="font-size:18px;font-weight:700;margin-bottom:14px">Scheda #${schN}</p>
+      ${riepilogoHTML}
+      <p style="font-size:12px;color:var(--tx2);text-align:center;margin-top:12px;margin-bottom:16px">Verifica che i dati siano corretti. Una volta confermata la scheda verrà salvata sul server.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn bd2" style="padding:12px;font-size:14px" onclick="closeModal()">← Modifica</button>
+        <button class="btn bg" style="padding:12px;font-size:14px;font-weight:600" onclick="doSaveBallot()">✓ Conferma e salva</button>
+      </div>
+    </div>
+  `);
+}
+
+// Effettivo salvataggio (chiamato DOPO la conferma del popup)
+async function doSaveBallot(){
+  closeModal();
   const d=bData;
   fd.votanti=(fd.votanti||0)+1;
   if(d.tipo==='bianca')fd.bianche=(fd.bianche||0)+1;
@@ -981,8 +1102,10 @@ function initCharts(){
     {label:C2.nome,data:Array.from({length:N},(_,i)=>num((allData[i+1]||defSez()).vc2)),backgroundColor:'#B84020',borderRadius:4,borderSkipped:false}
   ]},options:{responsive:true,plugins:{legend:{labels:{font:{size:11},boxWidth:12,color:'#666',padding:14}}},
   scales:{x:{grid:{display:false},ticks:{font:{size:11},color:'#888'}},y:{grid:{color:'rgba(0,0,0,.06)'},ticks:{font:{size:11},color:'#888'}}}}});
-  const s1=CANDS[0].map((c,j)=>({n:(c.nome||'').split(' ').pop()||('C'+(j+1)),v:t.p1[j]||0})).sort((a,b)=>b.v-a.v);
-  const s2=CANDS[1].map((c,j)=>({n:(c.nome||'').split(' ').pop()||('C'+(j+1)),v:t.p2[j]||0})).sort((a,b)=>b.v-a.v);
+  const lbl1=buildShortLabels(CANDS[0]||[]);
+  const lbl2=buildShortLabels(CANDS[1]||[]);
+  const s1=CANDS[0].map((c,j)=>({n:lbl1[j]||('C'+(j+1)),v:t.p1[j]||0})).sort((a,b)=>b.v-a.v);
+  const s2=CANDS[1].map((c,j)=>({n:lbl2[j]||('C'+(j+1)),v:t.p2[j]||0})).sort((a,b)=>b.v-a.v);
   const mkP=(id,data,col)=>{const ctx=$(id);if(!ctx)return null;return new Chart(ctx,{type:'bar',data:{labels:data.map(x=>x.n),datasets:[{data:data.map(x=>x.v),backgroundColor:col,borderRadius:3,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(0,0,0,.06)'},ticks:{font:{size:10},color:'#888'}},y:{grid:{display:false},ticks:{font:{size:10},color:'#555'}}}}});};
   charts.p1=mkP('ch-p1',s1,'#1B5299');charts.p2=mkP('ch-p2',s2,'#B84020');
 }
@@ -996,7 +1119,12 @@ function updDash(){
   const b1=$('d-b1');if(b1)b1.style.width=pct(t.pc1);const b2=$('d-b2');if(b2)b2.style.width=pct(t.pc2);
   const tb=$('d-tb');if(tb)tb.innerHTML=tblRows(allData);
   if(charts.sz){charts.sz.data.datasets[0].data=Array.from({length:N},(_,i)=>num((allData[i+1]||defSez()).vc1));charts.sz.data.datasets[1].data=Array.from({length:N},(_,i)=>num((allData[i+1]||defSez()).vc2));charts.sz.update('none')}
-  const upd=(ch,cands,pk)=>{if(!ch)return;const s=cands.map((c,j)=>({n:(c.nome||'').split(' ').pop()||('C'+(j+1)),v:t[pk][j]||0})).sort((a,b)=>b.v-a.v);ch.data.labels=s.map(x=>x.n);ch.data.datasets[0].data=s.map(x=>x.v);ch.update('none')};
+  const upd=(ch,cands,pk)=>{
+    if(!ch)return;
+    const lbls=buildShortLabels(cands||[]);
+    const s=cands.map((c,j)=>({n:lbls[j]||('C'+(j+1)),v:t[pk][j]||0})).sort((a,b)=>b.v-a.v);
+    ch.data.labels=s.map(x=>x.n);ch.data.datasets[0].data=s.map(x=>x.v);ch.update('none');
+  };
   upd(charts.p1,CANDS[0],'p1');upd(charts.p2,CANDS[1],'p2');
 }
 function startClock(){clearInterval(clockI);const f=()=>{const e=$('live-clk');if(e)e.textContent=new Date().toLocaleTimeString('it-IT')};f();clockI=setInterval(f,1000)}
@@ -1228,6 +1356,7 @@ window.exportCSV=exportCSV;window.exportJSON=exportJSON;window.resetAll=resetAll
 window.showListDash=showListDash;window.exportListCSV=exportListCSV;
 window.showBackups=showBackups;window.makeBackup=makeBackup;window.restoreBackup=restoreBackup;
 window.downloadBackup=downloadBackup;window.deleteBackup=deleteBackup;
+window.showModal=showModal;window.closeModal=closeModal;window.doSaveBallot=doSaveBallot;
 </script>
 </body>
 </html>
