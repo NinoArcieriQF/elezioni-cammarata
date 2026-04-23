@@ -888,30 +888,29 @@ async function toggleDone(){
   renSez();
 }
 
-/* ══ BALLOT — 5 STEP ════════════════════════════════════════
+/* ══ BALLOT — 4 STEP ════════════════════════════════════════
    Step 1: tipo (valida/bianca/nulla)
    Step 2: voto sindaco (cand 1 / cand 2 / nessuno)
-   Step 3: voto lista simbolo (L1 / L2 / nessuna)
-   Step 4: lista delle preferenze (da quale scegliere candidati)
-   Step 5: preferenze candidati (max 2 con regola genere)
+   Step 3: voto lista (L1 / L2 / nessuna)
+   Step 4: preferenze candidati (dalla lista votata allo step 3)
 ═══════════════════════════════════════════════════════════ */
 function showBallot(){
   view='ballot';
-  bData={tipo:null,sindaco:null,lista:null,listaPref:null,prefs:[]};
+  bData={tipo:null,sindaco:null,lista:null,prefs:[]};
   renBallot();
 }
 function backToSez(){view='sez';renSez()}
 
 function renBallot(){
   const d=bData;
-  const ci=d.listaPref===1?0:d.listaPref===2?1:null;
+  // La lista di riferimento per preferenze = lista votata allo step 3
+  const ci=d.lista===1?0:d.lista===2?1:null;
   const showS=d.tipo==='valida';
   const showL=showS && d.sindaco!==null;
-  const showLP=showL && d.lista!==null;
-  const showP=showLP && (d.listaPref===1||d.listaPref===2);
+  const showP=showL && (d.lista===1||d.lista===2);
   const isDis=d.tipo==='valida' && (d.sindaco===1||d.sindaco===2) && (d.lista===1||d.lista===2) && d.sindaco!==d.lista;
   const gErr=showP&&ci!==null?genderErr(d.prefs,CANDS[ci]):null;
-  const canConf=d.tipo==='bianca'||d.tipo==='nulla'||(showS && d.sindaco!==null && d.lista!==null && d.listaPref!==null && !gErr);
+  const canConf=d.tipo==='bianca'||d.tipo==='nulla'||(showS && d.sindaco!==null && d.lista!==null && !gErr);
   const schN=num(fd.votanti)+1;
 
   let prefHTML='';
@@ -964,7 +963,9 @@ function renBallot(){
 
     ${showL?`
     <div class="sdiv"></div>
-    <p class="sl" data-n="3">Voto alla lista (simbolo barrato)</p>
+    <p class="sl" data-n="3">Voto alla lista (simbolo barrato)
+      <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">— le preferenze saranno di questa lista</span>
+    </p>
     <div class="cpg">
       <button class="cpb cc1${d.lista===1?' sel':''}" onclick="selLista(1)">
         <div class="cpl">Voto lista</div><div class="cpn">${listaNomi[0]}</div>
@@ -978,26 +979,9 @@ function renBallot(){
     </button>
     ${isDis?'<div class="no nwa" style="margin-top:-6px;margin-bottom:10px">Voto disgiunto: sindaco e lista di schieramenti diversi</div>':''}`:''}
 
-    ${showLP?`
-    <div class="sdiv"></div>
-    <p class="sl" data-n="4">Lista delle preferenze
-      <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">— le preferenze di un'altra lista sono nulle</span>
-    </p>
-    <div class="cpg">
-      <button class="cpb cc1${d.listaPref===1?' sel':''}" onclick="selListaPref(1)">
-        <div class="cpl">Preferenze da</div><div class="cpn">${listaNomi[0]}</div>
-      </button>
-      <button class="cpb cc2${d.listaPref===2?' sel':''}" onclick="selListaPref(2)">
-        <div class="cpl">Preferenze da</div><div class="cpn">${listaNomi[1]}</div>
-      </button>
-    </div>
-    <button class="btn${d.listaPref==='nessuna'?' bp':''}" style="width:100%;padding:9px;font-size:12px;margin-bottom:1rem" onclick="selListaPref('nessuna')">
-      Nessuna preferenza espressa
-    </button>`:''}
-
     ${showP?`
     <div class="sdiv"></div>
-    <p class="sl" data-n="5">Preferenze consiglieri
+    <p class="sl" data-n="4">Preferenze consiglieri · ${listaNomi[ci]}
       <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">opzionali · ${d.prefs.length}/${MPREF}</span>
     </p>
     <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;display:flex;align-items:center;gap:6px">
@@ -1007,6 +991,11 @@ function renBallot(){
     <div class="pg">${prefHTML}</div>
     ${gErr?`<div class="no ner">${gErr}</div>`:''}
     ${d.prefs.length>=2&&!gErr?`<div class="no nok">Genere valido ✓</div>`:''}`:''}
+
+    ${showL && d.lista==='nessuna'?`
+    <div class="sdiv"></div>
+    <div class="no nwa">Senza voto alla lista non è possibile registrare preferenze consiglieri (sarebbero nulle). Conferma pure se la scheda non riporta simbolo lista barrato.</div>
+    `:''}
 
     <div style="margin-top:${showP?'4px':'1rem'}">
       ${canConf
@@ -1018,12 +1007,15 @@ function renBallot(){
 
 function selTipo(t){
   bData.tipo=t;
-  if(t!=='valida'){bData.sindaco=null;bData.lista=null;bData.listaPref=null;bData.prefs=[];}
+  if(t!=='valida'){bData.sindaco=null;bData.lista=null;bData.prefs=[];}
   renBallot();
 }
 function selSindaco(s){bData.sindaco=s;renBallot();}
-function selLista(l){bData.lista=l;renBallot();}
-function selListaPref(l){bData.listaPref=l;bData.prefs=[];renBallot();}
+function selLista(l){
+  bData.lista=l;
+  bData.prefs=[]; // reset preferenze al cambio lista
+  renBallot();
+}
 function togPref(j){
   const i=bData.prefs.indexOf(j);
   if(i>=0)bData.prefs.splice(i,1);
@@ -1034,7 +1026,7 @@ function togPref(j){
 async function confirmBallot(){
   const d=bData;
   const schN=num(fd.votanti)+1;
-  const ci=d.listaPref===1?0:d.listaPref===2?1:null;
+  const ci=d.lista===1?0:d.lista===2?1:null;
   const isDisgiunto=d.tipo==='valida' && (d.sindaco===1||d.sindaco===2) && (d.lista===1||d.lista===2) && d.sindaco!==d.lista;
 
   let riepilogoHTML='';
@@ -1067,28 +1059,11 @@ async function confirmBallot(){
         <p style="font-size:13px;color:var(--tx3)">Nessun voto</p>
       </div>`;
     }
-    // Box lista
+    // Box lista + preferenze combinate
     let listaBox='';
     if(d.lista===1||d.lista===2){
       const idx=d.lista-1;
       const nome=listaNomi[idx];
-      const col=idx===0?'var(--c1)':'var(--c2)';
-      const bg=idx===0?'var(--c1l)':'var(--c2l)';
-      listaBox=`<div style="background:${bg};padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${col};margin-bottom:2px;font-weight:600">Voto Lista</p>
-        <p style="font-size:14px;font-weight:600;color:${col}">${nome}</p>
-      </div>`;
-    }else{
-      listaBox=`<div style="background:var(--sf2);padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px;font-weight:600">Voto Lista</p>
-        <p style="font-size:13px;color:var(--tx3)">Nessun simbolo barrato</p>
-      </div>`;
-    }
-    // Box preferenze
-    let prefBox='';
-    if((d.listaPref===1||d.listaPref===2)&&ci!==null){
-      const idx=d.listaPref-1;
-      const nomeLista=listaNomi[idx];
       const col=idx===0?'var(--c1)':'var(--c2)';
       const bg=idx===0?'var(--c1l)':'var(--c2l)';
       const prefList=d.prefs.length>0
@@ -1101,17 +1076,17 @@ async function confirmBallot(){
             </div>`;
           }).join('')
         : '<p style="font-size:11px;color:var(--tx3);padding:2px 0">Nessuna preferenza espressa</p>';
-      prefBox=`<div style="background:${bg};padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${col};margin-bottom:5px;font-weight:600">Preferenze · ${nomeLista}</p>
+      listaBox=`<div style="background:${bg};padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${col};margin-bottom:5px;font-weight:600">Lista e preferenze · ${nome}</p>
         ${prefList}
       </div>`;
     }else{
-      prefBox=`<div style="background:var(--sf2);padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px;font-weight:600">Preferenze</p>
-        <p style="font-size:13px;color:var(--tx3)">Nessuna preferenza</p>
+      listaBox=`<div style="background:var(--sf2);padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px;font-weight:600">Lista e preferenze</p>
+        <p style="font-size:13px;color:var(--tx3)">Nessun voto lista</p>
       </div>`;
     }
-    riepilogoHTML=sindBox+listaBox+prefBox
+    riepilogoHTML=sindBox+listaBox
       +(isDisgiunto?`<div class="no nwa" style="margin-bottom:8px;font-size:12px">⚠ Voto disgiunto: sindaco e lista di schieramenti diversi</div>`:'');
   }
 
@@ -1148,14 +1123,14 @@ async function doSaveBallot(){
       if(d.sindaco===1)fd.vd12=(fd.vd12||0)+1;
       else fd.vd21=(fd.vd21||0)+1;
     }
-    // Preferenze (solo se listaPref valida)
-    if(d.listaPref===1||d.listaPref===2){
-      const pk=d.listaPref===1?'p1':'p2';
+    // Preferenze (dalla lista votata, solo se lista valida)
+    if(d.lista===1||d.lista===2){
+      const pk=d.lista===1?'p1':'p2';
       if(!fd[pk])fd[pk]={};
       d.prefs.forEach(j=>{fd[pk][j]=(fd[pk][j]||0)+1});
     }
   }
-  // Storico ultime 10 schede (per undo esteso e annullamento ex-post)
+  // Storico ultime 10 schede
   if(!fd.lastBallots)fd.lastBallots=[];
   fd.lastBallots.push({
     num:fd.votanti,
@@ -1167,7 +1142,7 @@ async function doSaveBallot(){
   fd.upd=new Date().toISOString();
   allData[selSez]=fd;cacheSave();
   await fbSaveSez(selSez,fd);
-  fbLogEvent({tipo:'scheda',sezione:selSez,numScheda:fd.votanti,tipoScheda:d.tipo,sindaco:d.sindaco,lista:d.lista,listaPref:d.listaPref,nPrefs:d.prefs.length,disgiunto:(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista});
+  fbLogEvent({tipo:'scheda',sezione:selSez,numScheda:fd.votanti,tipoScheda:d.tipo,sindaco:d.sindaco,lista:d.lista,nPrefs:d.prefs.length,disgiunto:(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista});
   view='sez';renSez();
   setTimeout(()=>{
     const m=$('sez-msg');
@@ -1179,7 +1154,6 @@ async function doSaveBallot(){
   },30);
 }
 
-// Undo: annulla l'ultima scheda dallo storico
 async function undoLast(){
   if(!fd.lastBallots||fd.lastBallots.length===0)return;
   const last=fd.lastBallots.pop();
@@ -1197,8 +1171,8 @@ async function undoLast(){
       if(d.sindaco===1)fd.vd12=Math.max(0,(fd.vd12||0)-1);
       else fd.vd21=Math.max(0,(fd.vd21||0)-1);
     }
-    if(d.listaPref===1||d.listaPref===2){
-      const pk=d.listaPref===1?'p1':'p2';
+    if(d.lista===1||d.lista===2){
+      const pk=d.lista===1?'p1':'p2';
       if(fd[pk])d.prefs.forEach(j=>{if(fd[pk][j]!==undefined)fd[pk][j]=Math.max(0,fd[pk][j]-1)});
     }
   }
@@ -1209,15 +1183,13 @@ async function undoLast(){
   renSez();
 }
 
-// Annullamento ex-post: trasforma una scheda dello storico in NULLA
 async function annullaScheda(idx){
   if(!fd.lastBallots||!fd.lastBallots[idx])return;
   const sch=fd.lastBallots[idx];
   const d=sch.data;
-  if(d._annullataEx){closeModal();return} // già annullata
-  if(d.tipo==='nulla'){closeModal();return} // già nulla di suo
+  if(d._annullataEx){closeModal();return}
+  if(d.tipo==='nulla'){closeModal();return}
 
-  // Sottrai i valori originali
   if(d.tipo==='bianca')fd.bianche=Math.max(0,(fd.bianche||0)-1);
   else{
     if(d.sindaco===1)fd.vc1=Math.max(0,(fd.vc1||0)-1);
@@ -1229,14 +1201,12 @@ async function annullaScheda(idx){
       if(d.sindaco===1)fd.vd12=Math.max(0,(fd.vd12||0)-1);
       else fd.vd21=Math.max(0,(fd.vd21||0)-1);
     }
-    if(d.listaPref===1||d.listaPref===2){
-      const pk=d.listaPref===1?'p1':'p2';
+    if(d.lista===1||d.lista===2){
+      const pk=d.lista===1?'p1':'p2';
       if(fd[pk])d.prefs.forEach(j=>{if(fd[pk][j]!==undefined)fd[pk][j]=Math.max(0,fd[pk][j]-1)});
     }
   }
-  // Aggiungi alle nulle
   fd.nulle=(fd.nulle||0)+1;
-  // Marca la scheda nello storico
   fd.lastBallots[idx].data._annullataEx=true;
   fd.lastBallots[idx].annullataTs=new Date().toISOString();
   fd.lastBallots[idx].annullataBy=userRole;
@@ -1865,7 +1835,7 @@ window.showListDash=showListDash;window.exportListCSV=exportListCSV;
 window.showBackups=showBackups;window.makeBackup=makeBackup;window.restoreBackup=restoreBackup;
 window.downloadBackup=downloadBackup;window.deleteBackup=deleteBackup;
 window.showModal=showModal;window.closeModal=closeModal;window.doSaveBallot=doSaveBallot;
-window.selListaPref=selListaPref;window.annullaScheda=annullaScheda;
+window.annullaScheda=annullaScheda;
 window.showStoricoSchede=showStoricoSchede;window.confermaAnnulla=confermaAnnulla;
 </script>
 </body>
