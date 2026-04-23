@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elezioni Comunali</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px;-webkit-text-size-adjust:100%}
+body{font-family:'DM Sans',sans-serif;background:#F5F3EE;color:#1A1A18;min-height:100vh;line-height:1.5}
+:root{
+  --c1:#1B5299;--c1l:#D8E8F7;--c1m:#2B6BB5;--c1t:#0D3666;
+  --c2:#B84020;--c2l:#FAE8E3;--c2m:#C8512A;--c2t:#7A2810;
+  --gn:#2D6A35;--gnl:#E3F2E5;--am:#7A5010;--aml:#FDF0DA;
+  --sf:#FFF;--sf2:#EFEDE8;--bd:rgba(0,0,0,.1);--bds:rgba(0,0,0,.18);
+  --tx:#1A1A18;--tx2:#5A5A54;--tx3:#9A9A90;--r:12px;--rs:8px
+}
+#root{max-width:640px;margin:0 auto;padding:0 1rem 3rem}
+.wide{max-width:1020px!important}
+.tb{display:flex;align-items:center;justify-content:space-between;padding:1.125rem 0 .875rem;border-bottom:1px solid var(--bd);margin-bottom:1.25rem;position:sticky;top:0;background:#F5F3EE;z-index:10}
+.tb-t{font-size:15px;font-weight:600}
+.tb-s{font-size:11px;color:var(--tx3);margin-top:1px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:var(--rs);border:1px solid var(--bds);background:var(--sf);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:background .12s,transform .08s}
+.btn:hover{background:var(--sf2)}.btn:active{transform:scale(.97)}.btn[disabled]{opacity:.32;cursor:not-allowed;transform:none}
+.bp{background:var(--c1);color:#fff;border-color:var(--c1t)}.bp:hover{background:var(--c1m)}
+.bg{background:var(--gn);color:#fff;border-color:#1E4D25}.bg:hover{background:#245A2C}
+.bd2{color:#8B1A1A;border-color:#C44}.bd2:hover{background:#FEF0F0}
+.bw{width:100%;padding:14px;font-size:15px}.blg{padding:16px;font-size:16px;font-weight:600}
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sc{padding:18px 6px;background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);text-align:center;cursor:pointer;transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:4px}
+.sc:hover{border-color:var(--c1);background:var(--c1l)}.sc.done{border-color:var(--gn);background:var(--gnl)}.sc.part{border-color:var(--c1m)}
+.sc .sn{font-size:22px;font-weight:700}.sc .ss{font-size:10px;color:var(--tx3);font-family:'DM Mono',monospace}
+.sc.done .sn{color:var(--gn)}.sc.done .ss{color:var(--gn)}.sc.part .sn{color:var(--c1)}
+.kg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.kpi{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:.875rem 1rem}
+.kl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);margin-bottom:5px}
+.kv{font-size:24px;font-weight:700;line-height:1}
+.ks{font-size:11px;color:var(--tx3);margin-top:4px;font-family:'DM Mono',monospace}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.cb{border-radius:var(--r);padding:1rem 1.125rem;border:1px solid}
+.cb1{background:var(--c1l);border-color:#A8CAEA}.cb2{background:var(--c2l);border-color:#EAB8A8}
+.cl2{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px}
+.cn{font-size:14px;font-weight:600;margin-bottom:10px}.cv{font-size:30px;font-weight:700;line-height:1}.cp{font-size:12px;margin-top:3px;font-family:'DM Mono',monospace}
+.cb1 .cl2{color:var(--c1m)}.cb1 .cn{color:var(--c1t)}.cb1 .cv{color:var(--c1)}.cb1 .cp{color:var(--c1m)}
+.cb2 .cl2{color:var(--c2m)}.cb2 .cn{color:var(--c2t)}.cb2 .cv{color:var(--c2)}.cb2 .cp{color:var(--c2m)}
+.pt{height:5px;background:rgba(0,0,0,.1);border-radius:3px;margin-top:10px;overflow:hidden}
+.pf{height:100%;border-radius:3px;transition:width .6s ease}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:1rem 1.25rem;margin-bottom:10px}
+.ct{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);margin-bottom:12px;display:block}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;padding:6px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);border-bottom:1px solid var(--bd);font-weight:500}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--bd)}.tbl tr:last-child td{border-bottom:none}
+.badge{display:inline-flex;align-items:center;font-size:11px;padding:3px 9px;border-radius:20px;font-weight:500;font-family:'DM Mono',monospace}
+.bok{background:var(--gnl);color:var(--gn)}.bwip{background:var(--aml);color:var(--am)}.bwt{background:var(--sf2);color:var(--tx3)}
+.bdis{background:#FFF4E8;color:#9A5A00;border:1px solid #F0C870}
+.gb{font-size:9px;padding:2px 5px;border-radius:3px;font-weight:700;flex-shrink:0;font-family:'DM Mono',monospace}
+.gbm{background:#E8EFF8;color:#1B5299}.gbf{background:#FDE8F0;color:#8B2252}
+.tg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:1.25rem}
+.tb2{padding:20px 8px;border:1px solid var(--bds);border-radius:var(--r);background:var(--sf);cursor:pointer;text-align:center;font-family:'DM Sans',sans-serif;transition:all .12s}
+.tb2:hover{border-color:var(--c1);background:var(--c1l)}
+.ti{font-size:22px;margin-bottom:6px}.tl{font-size:13px;font-weight:600}
+.tb2.sv{border:2px solid var(--c1);background:var(--c1l)}
+.tb2.sb{border:2px solid #888;background:var(--sf2)}
+.tb2.sn2{border:2px solid #C44;background:#FEF0F0}
+.cpg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.25rem}
+.cpb{padding:18px 14px;border-radius:var(--r);text-align:center;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;border:2px solid}
+.cc1{background:var(--c1l);border-color:#A8CAEA}.cc1:hover{border-color:var(--c1)}.cc1.sel{border-color:var(--c1);box-shadow:0 0 0 4px rgba(27,82,153,.12)}
+.cc2{background:var(--c2l);border-color:#EAB8A8}.cc2:hover{border-color:var(--c2)}.cc2.sel{border-color:var(--c2);box-shadow:0 0 0 4px rgba(184,64,32,.12)}
+.cpl{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:3px}
+.cpn{font-size:14px;font-weight:600}
+.cc1 .cpl{color:var(--c1m)}.cc1 .cpn{color:var(--c1t)}.cc2 .cpl{color:var(--c2m)}.cc2 .cpn{color:var(--c2t)}
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.pb{padding:11px 10px;border:1px solid var(--bd);border-radius:var(--rs);background:var(--sf);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;text-align:left;display:flex;align-items:center;gap:7px;transition:border-color .1s,background .1s;line-height:1.3;min-height:44px}
+.pb:hover:not([disabled]){border-color:var(--c1);background:var(--c1l)}
+.pb.p1{border:1.5px solid var(--c1);background:var(--c1l);color:var(--c1t)}
+.pb.p2{border:1.5px solid var(--c2);background:var(--c2l);color:var(--c2t)}
+.pb[disabled]{opacity:.28;cursor:not-allowed}
+.pnum{min-width:18px;height:18px;border-radius:50%;font-size:10px;font-weight:700;font-family:'DM Mono',monospace;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff}
+.pnum.n1{background:var(--c1)}.pnum.n2{background:var(--c2)}
+.sl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.sl::before{content:attr(data-n);min-width:18px;height:18px;border-radius:50%;background:var(--sf2);color:var(--tx2);font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace}
+.sdiv{height:1px;background:var(--bd);margin:1rem 0}
+.sr{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)}
+.sr:last-child{border-bottom:none}
+.srl{font-size:13px;color:var(--tx2)}.srv{font-size:14px;font-weight:600;font-family:'DM Mono',monospace}
+.no{padding:10px 14px;border-radius:var(--rs);font-size:13px;margin-bottom:10px;animation:fin .25s}
+.nok{background:var(--gnl);color:var(--gn);border:1px solid #A8D4AC}
+.ner{background:#FEF0F0;color:#8B1A1A;border:1px solid #E8BBBB}
+.nin{background:var(--c1l);color:var(--c1t);border:1px solid #A8CAEA}
+.nwa{background:#FFF4E8;color:#9A5A00;border:1px solid #F0C870}
+@keyframes fin{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.asdot{width:7px;height:7px;border-radius:50%;background:var(--gn);display:inline-block;animation:pulse 2s infinite}
+.asdot.off{background:#C44}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.inp{width:100%;padding:11px 14px;border:1px solid var(--bds);border-radius:var(--rs);font-family:'DM Sans',sans-serif;font-size:14px;background:var(--sf);color:var(--tx)}
+.inp:focus{outline:none;border-color:var(--c1);box-shadow:0 0 0 3px rgba(27,82,153,.1)}
+.ism{padding:8px 10px;font-size:13px;border:1px solid var(--bd);border-radius:var(--rs);font-family:'DM Sans',sans-serif;background:var(--sf);color:var(--tx);width:100%}
+.ism:focus{outline:none;border-color:var(--c1)}
+.gtog{display:flex;border-radius:6px;overflow:hidden;border:1px solid var(--bd);flex-shrink:0}
+.gtog button{padding:5px 9px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;border:none;cursor:pointer;background:var(--sf2);color:var(--tx3);transition:all .1s}
+.gtog button.am{background:#E8EFF8;color:#1B5299}.gtog button.af{background:#FDE8F0;color:#8B2252}
+.ar{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.ar .idx{font-size:11px;font-family:'DM Mono',monospace;color:var(--tx3);min-width:20px;text-align:right;flex-shrink:0}
+.pwo{position:fixed;inset:0;background:#F5F3EE;display:flex;align-items:center;justify-content:center;z-index:999;padding:1.5rem}
+.pwb{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:2rem;width:100%;max-width:340px}
+.pwt{font-size:18px;font-weight:700;margin-bottom:3px}
+.pws{font-size:13px;color:var(--tx3);margin-bottom:20px}
+.pwi{width:100%;padding:14px;border:1px solid var(--bds);border-radius:var(--rs);font-family:'DM Mono',monospace;font-size:24px;background:var(--sf);color:var(--tx);margin-bottom:10px;text-align:center;letter-spacing:10px}
+.pwi:focus{outline:none;border-color:var(--c1);box-shadow:0 0 0 3px rgba(27,82,153,.1)}
+.rg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.rb{padding:14px 10px;border:1px solid var(--bds);border-radius:var(--r);cursor:pointer;text-align:center;font-family:'DM Sans',sans-serif;transition:all .12s;background:var(--sf)}
+.rb:hover{border-color:var(--c1);background:var(--c1l)}.rb.sel{border:2px solid var(--c1);background:var(--c1l)}
+.ri{font-size:22px;margin-bottom:5px}.rl{font-size:12px;font-weight:600;color:var(--tx2)}
+.io{display:flex;gap:8px;flex-wrap:wrap}
+.conn{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--gn);font-family:'DM Mono',monospace}
+.conn.off{color:#C44}
+@media(max-width:480px){.kg{grid-template-columns:1fr 1fr}.cg{grid-template-columns:1fr}.cpg{grid-template-columns:1fr}.pg{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ╔══════════════════════════════════════════════════════════╗
+     ║               ⚙  CONFIGURAZIONE                        ║
+     ║  Modifica solo questo blocco — non toccare il resto.   ║
+     ╚══════════════════════════════════════════════════════════╝ -->
+<script>
+const COMUNE  = 'Cammarata';
+const DATA_EL = '24-25 Maggio 2026';
+const N       = 6;      // numero sezioni
+const MPREF   = 2;      // max preferenze per scheda
+
+// Numero elettori per sezione (N valori) — sostituisci con dati reali
+const EL = [620, 584, 601, 557, 612, 590];
+
+// Candidati sindaco
+const C1 = { nome: 'Giuseppe Mangiapane', lista: 'Costruire Orizzonti' };
+const C2 = { nome: 'Giuliano Traina',     lista: 'Idea Comune' };
+
+// PIN accesso (4 cifre)
+const PIN_COORD = '1234';
+const PIN_RAPP  = '5678';
+
+// Token di autenticazione server-side (corrisponde a _auth/secret su Firestore)
+// Senza questo token nessuna scrittura va a buon fine
+const FB_TOKEN = 'Cmm2026-xK8p2Mq9wLz4RnT7';
+
+// Configurazione Firebase (fornita da Google)
+const firebaseConfig = {
+  apiKey: "AIzaSyAwyng0nAbeMNkdTP_Rvs1NVu2BPltT3II",
+  authDomain: "elezioni-cammarata-2026.firebaseapp.com",
+  projectId: "elezioni-cammarata-2026",
+  storageBucket: "elezioni-cammarata-2026.firebasestorage.app",
+  messagingSenderId: "591247044846",
+  appId: "1:591247044846:web:d800fbf347415f623b03ff",
+  measurementId: "G-0ZDRHKR5EH"
+};
+
+// I nomi delle liste e i 12 candidati per lista (con genere M/F)
+// si gestiscono dall'app: Coordinatore → "Candidati e Liste"
+</script>
+<!-- ╔══════════════════════════════════════════════════════════╗
+     ║              Fine blocco configurazione                 ║
+     ╚══════════════════════════════════════════════════════════╝ -->
+
+<!-- FIREBASE SDK (modulare v10) -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, getDoc, onSnapshot, collection,
+  enableIndexedDbPersistence, serverTimestamp, addDoc, query, orderBy, limit
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const app = initializeApp(window.firebaseConfig);
+const db  = getFirestore(app);
+
+// Persistenza offline: se il wifi cade, continua a salvare in locale e sincronizza quando torna
+try {
+  await enableIndexedDbPersistence(db).catch(() => {});
+} catch(e) {}
+
+// Espone Firebase globalmente per il resto dell'app
+window.fb = { db, doc, setDoc, getDoc, onSnapshot, collection, serverTimestamp, addDoc, query, orderBy, limit };
+window.fbReady = true;
+window.dispatchEvent(new Event('fb-ready'));
+</script>
+
+<!-- LOGIN SCREEN -->
+<div class="pwo" id="pw-screen">
+  <div class="pwb">
+    <p class="pwt">Elezioni Comunali</p>
+    <p class="pws" id="pw-sub"></p>
+    <p style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">Ruolo</p>
+    <div class="rg">
+      <button class="rb sel" onclick="selRole('coord',this)"><div class="ri">📊</div><div class="rl">Coordinatore</div></button>
+      <button class="rb"     onclick="selRole('rapp',this)"><div class="ri">🗳️</div><div class="rl">Rappresentante</div></button>
+    </div>
+    <div id="pw-sez" style="display:none;margin-bottom:14px">
+      <p style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">La tua sezione</p>
+      <div id="pw-sez-g" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px"></div>
+    </div>
+    <input type="password" class="pwi" id="pw-inp" placeholder="••••" maxlength="4" inputmode="numeric">
+    <div id="pw-err" style="font-size:12px;color:#C44;text-align:center;min-height:16px;margin-bottom:8px"></div>
+    <button class="btn bp bw" onclick="checkPw()">Accedi</button>
+    <div id="pw-fb-status" style="font-size:11px;color:var(--tx3);text-align:center;margin-top:12px">Connessione al server in corso…</div>
+  </div>
+</div>
+
+<div id="app-root" style="display:none">
+  <div id="root" style="max-width:640px;margin:0 auto;padding:0 1rem 3rem"></div>
+</div>
+
+<script>
+// Espone firebaseConfig allo script module
+window.firebaseConfig = firebaseConfig;
+
+/* ══ STATO ═════════════════════════════════════════════════ */
+let view='home', userRole=null, userSez=null, selSez=null;
+let allData={}, fd={}, bData={tipo:null,sindaco:null,lista:null,prefs:[]};
+let lastBallot=null, charts={}, timerC=null, clockI=null;
+let selRoleVal='coord', selSezLogin=null;
+let CANDS=[], listaNomi=[C1.lista, C2.lista];
+let isOnline=navigator.onLine, fbReady=false;
+let unsubSez=null, unsubCfg=null;
+
+/* ══ FIREBASE WRAPPER ══════════════════════════════════════ */
+window.addEventListener('fb-ready', ()=>{fbReady=true;onFbReady()});
+if(window.fbReady)fbReady=true;
+window.addEventListener('online', ()=>{isOnline=true;updateConnUI()});
+window.addEventListener('offline',()=>{isOnline=false;updateConnUI()});
+
+function updateConnUI(){
+  const el=document.querySelector('.conn-indicator');
+  if(el){el.className='conn-indicator conn '+(isOnline?'':'off');el.innerHTML=(isOnline?'<span class="asdot"></span> online':'<span class="asdot off"></span> offline')}
+}
+
+async function fbSaveSez(i,d){
+  if(!fbReady)return;
+  try{
+    await window.fb.setDoc(window.fb.doc(window.fb.db,'sezioni',String(i)),{...d,_token:FB_TOKEN,_updatedAt:new Date().toISOString()});
+  }catch(e){console.error('FB save err',e)}
+}
+async function fbSaveCfg(){
+  if(!fbReady)return;
+  try{
+    await window.fb.setDoc(window.fb.doc(window.fb.db,'config','main'),{
+      cands:CANDS,liste:listaNomi,_token:FB_TOKEN,_updatedAt:new Date().toISOString()
+    });
+  }catch(e){console.error('FB cfg err',e)}
+}
+async function fbLogEvent(evt){
+  if(!fbReady)return;
+  try{
+    await window.fb.addDoc(window.fb.collection(window.fb.db,'eventi'),{
+      ...evt, _token:FB_TOKEN, ts:new Date().toISOString(), ua:navigator.userAgent.slice(0,50)
+    });
+  }catch(e){}
+}
+
+function onFbReady(){
+  // All'avvio: listener in tempo reale sulle sezioni + configurazione
+  try{
+    window.fb.onSnapshot(window.fb.collection(window.fb.db,'sezioni'), snap=>{
+      const fresh={};
+      snap.forEach(doc=>{fresh[doc.id]={...defSez(),...doc.data()}});
+      for(let i=1;i<=N;i++){allData[i]=fresh[String(i)]||defSez()}
+      cacheSave();
+      // Aggiorna la UI se siamo in una vista che mostra i dati
+      if(view==='home')showHome();
+      else if(view==='dash')updDash();
+      else if(view==='listdash')renListDash();
+      else if(view==='sez' && String(selSez) in fresh){
+        fd={...defSez(),...fresh[String(selSez)]};
+        renSez();
+      }
+    });
+    window.fb.onSnapshot(window.fb.doc(window.fb.db,'config','main'), snap=>{
+      if(snap.exists()){
+        const data=snap.data();
+        if(data.cands && Array.isArray(data.cands) && data.cands.length===2){
+          CANDS=data.cands.map(list=>list.map(c=>typeof c==='string'?{nome:c,genere:'M'}:{nome:c.nome||'',genere:c.genere||'M'}));
+        }
+        if(data.liste && Array.isArray(data.liste) && data.liste.length===2){
+          listaNomi=data.liste;
+        }
+        cacheSave();
+        // Refresh UI se in una vista dove si vedono nomi/candidati
+        if(view==='home')showHome();
+        else if(view==='dash')renDash();
+        else if(view==='listdash')renListDash();
+        else if(view==='sez')renSez();
+        else if(view==='ballot')renBallot();
+        else if(view==='admin')showAdmin();
+      }
+    });
+  }catch(e){console.error('FB listen err',e)}
+  const s=$('pw-fb-status');if(s){s.innerHTML='<span style="color:var(--gn)">● Connesso al server</span>'}
+}
+
+/* ══ BACKUP AUTOMATICI (ogni 2 minuti) ═════════════════════
+   Tiene le ultime 30 versioni del database in localStorage
+   Il coordinatore può ripristinare l'ultimo backup in caso di sabotaggio
+═══════════════════════════════════════════════════════════ */
+const BK_KEY='cam5_backups';
+const BK_MAX=30;        // massimo 30 backup storici (= 1 ora di copertura)
+const BK_INTERVAL=2*60*1000;  // 2 minuti
+let bkTimer=null;
+
+function loadBackups(){
+  try{const r=localStorage.getItem(BK_KEY);if(r)return JSON.parse(r)}catch(e){}
+  return [];
+}
+function saveBackups(list){
+  try{localStorage.setItem(BK_KEY,JSON.stringify(list))}catch(e){}
+}
+function makeBackup(reason='auto'){
+  // Crea snapshot dei dati correnti
+  const snap={
+    ts:new Date().toISOString(),
+    reason, // 'auto', 'manual', 'pre-reset'
+    allData:JSON.parse(JSON.stringify(allData)),
+    CANDS:JSON.parse(JSON.stringify(CANDS)),
+    listaNomi:JSON.parse(JSON.stringify(listaNomi))
+  };
+  const list=loadBackups();
+  list.unshift(snap);
+  // Tieni solo BK_MAX backup
+  if(list.length>BK_MAX)list.length=BK_MAX;
+  saveBackups(list);
+  return snap;
+}
+function startBackupTimer(){
+  // Solo il coordinatore fa backup automatici
+  if(userRole!=='coord')return;
+  clearInterval(bkTimer);
+  // Primo backup subito dopo 10 secondi (dà tempo a Firebase di caricare i dati)
+  setTimeout(()=>{makeBackup('auto')},10000);
+  bkTimer=setInterval(()=>{makeBackup('auto')},BK_INTERVAL);
+}
+async function restoreBackup(bkIndex){
+  const list=loadBackups();
+  const bk=list[bkIndex];
+  if(!bk){alert('Backup non trovato');return}
+  if(!confirm(`Ripristinare il backup del ${new Date(bk.ts).toLocaleTimeString('it-IT')}? I dati attuali verranno sovrascritti su TUTTI i dispositivi.`))return;
+  // Backup di sicurezza prima di ripristinare (per undo-dell-undo)
+  makeBackup('pre-restore');
+  // Ripristino: scrivi tutto su Firebase
+  for(let i=1;i<=N;i++){
+    const sez=bk.allData[i]||defSez();
+    await fbSaveSez(i,sez);
+  }
+  if(bk.CANDS)CANDS=bk.CANDS;
+  if(bk.listaNomi)listaNomi=bk.listaNomi;
+  await fbSaveCfg();
+  fbLogEvent({tipo:'restore_backup',ts:bk.ts});
+  alert('Backup ripristinato correttamente.');
+  goHome();
+}
+function downloadBackup(bkIndex){
+  const list=loadBackups();
+  const bk=list[bkIndex];
+  if(!bk)return;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(bk,null,2)],{type:'application/json'}));
+  a.download='backup_'+COMUNE.toLowerCase()+'_'+bk.ts.slice(0,19).replace(/[:.]/g,'-')+'.json';
+  a.click();
+}
+function deleteBackup(bkIndex){
+  if(!confirm('Cancellare questo backup dalla lista locale?'))return;
+  const list=loadBackups();
+  list.splice(bkIndex,1);
+  saveBackups(list);
+  showBackups();
+}
+
+function showBackups(){
+  view='backups';
+  const list=loadBackups();
+  const rows=list.map((bk,i)=>{
+    const t=totals(bk.allData);
+    const dateStr=new Date(bk.ts).toLocaleString('it-IT');
+    const reasonBadge=bk.reason==='manual'?'<span class="badge bdis">manuale</span>'
+                    :bk.reason==='pre-reset'?'<span class="badge bwip">pre-reset</span>'
+                    :bk.reason==='pre-restore'?'<span class="badge bwip">pre-ripristino</span>'
+                    :'<span class="badge bwt">auto</span>';
+    return`<div class="card" style="margin-bottom:8px;padding:12px 14px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <div>
+          <div style="font-weight:600;font-size:13px">${dateStr}</div>
+          <div style="font-size:11px;color:var(--tx3);font-family:'DM Mono',monospace;margin-top:2px">
+            ${fn(t.vt)} votanti · ${fn(t.vc1)} vs ${fn(t.vc2)} · ${fn(t.bi+t.nu)} nulle/bianche
+          </div>
+        </div>
+        ${reasonBadge}
+      </div>
+      <div class="io">
+        <button class="btn bp" style="font-size:12px;padding:7px 12px" onclick="restoreBackup(${i})">↻ Ripristina</button>
+        <button class="btn" style="font-size:12px;padding:7px 12px" onclick="downloadBackup(${i})">📥 Scarica</button>
+        <button class="btn bd2" style="font-size:12px;padding:7px 12px" onclick="deleteBackup(${i})">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  $('root').className='';
+  $('root').innerHTML=`
+    <div class="tb">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn" onclick="goHome()">← Torna</button>
+        <div><div class="tb-t">Backup Automatici</div>
+        <div class="tb-s">Ogni 2 minuti · ultime ${BK_MAX} copie</div></div>
+      </div>
+      <button class="btn bg" style="font-size:12px;padding:7px 12px" onclick="makeBackup('manual');showBackups();">+ Backup manuale</button>
+    </div>
+    <div class="card" style="background:var(--c1l);border-color:#A8CAEA;margin-bottom:12px">
+      <p style="font-size:13px;color:var(--c1t);line-height:1.6">
+        <strong>Come funziona:</strong> ogni 2 minuti il sistema salva una copia di sicurezza dei dati sul tuo dispositivo. In caso di sabotaggio o errore, clicca <strong>"Ripristina"</strong> sul backup più vicino all'ora in cui i dati erano corretti. Il ripristino riscrive tutti i dati su Firebase e li rende visibili a tutti i dispositivi.
+      </p>
+    </div>
+    ${list.length===0
+      ?'<div class="card"><p style="font-size:13px;color:var(--tx3);text-align:center;padding:1rem">Nessun backup ancora. Il primo viene creato automaticamente dopo 10 secondi dall\'accesso.</p></div>'
+      :rows}
+  `;
+}
+
+/* ══ STORAGE LOCALE (fallback offline) ═════════════════════ */
+const SKL_CACHE='cam5_cache';
+function cacheSave(){
+  try{localStorage.setItem(SKL_CACHE,JSON.stringify({allData,CANDS,listaNomi}))}catch(e){}
+}
+function cacheLoad(){
+  try{const r=localStorage.getItem(SKL_CACHE);if(r){const p=JSON.parse(r);if(p.allData)allData=p.allData;if(p.CANDS)CANDS=p.CANDS;if(p.listaNomi)listaNomi=p.listaNomi;}}catch(e){}
+}
+
+function defSez(){
+  return{votanti:0,bianche:0,nulle:0,vc1:0,vc2:0,p1:{},p2:{},vd:0,vd12:0,vd21:0,done:false,upd:null};
+}
+function defCands(){
+  return [
+    [
+      {nome:'Viola Francesco',genere:'M'},
+      {nome:'Mangiapane Maria Conce',genere:'F'},
+      {nome:'Reina Nazareno',genere:'M'},
+      {nome:'Russotto Flavia',genere:'F'},
+      {nome:'Loria Renato',genere:'M'},
+      {nome:'La Mendola Elisa',genere:'F'},
+      {nome:'Tuzzolino Mario',genere:'M'},
+      {nome:'Lo Scrudato Patrizia',genere:'F'},
+      {nome:'Tomasino Giuseppe',genere:'M'},
+      {nome:'De Maria Maria Carmela',genere:'F'},
+      {nome:'Madonia Giuseppe',genere:'M'},
+      {nome:'Turco Floriana',genere:'F'}
+    ],
+    [
+      {nome:'Giambrone Vincenzo',genere:'M'},
+      {nome:'Bongiovanni Domenica',genere:'F'},
+      {nome:'Lo Scrudato Enzo',genere:'M'},
+      {nome:'Terramagra Ivana',genere:'F'},
+      {nome:'Cigno Carmelo',genere:'M'},
+      {nome:'Pellitteri Maria Elisa',genere:'F'},
+      {nome:'Bongiovanni Domenico',genere:'M'},
+      {nome:'Tuzzolino Nadia',genere:'F'},
+      {nome:'Mangiapane Gaetano',genere:'M'},
+      {nome:'Giarratana Vanessa',genere:'F'},
+      {nome:'Rappisi Carmelo',genere:'M'},
+      {nome:'Mancuso Vanessa',genere:'F'}
+    ]
+  ];
+}
+
+/* ══ HELPERS ════════════════════════════════════════════════ */
+const $ = id=>document.getElementById(id);
+const num = v=>parseInt(v)||0;
+const pct = v=>v.toFixed(1)+'%';
+const fn  = v=>Math.round(num(v)).toLocaleString('it-IT');
+const ft  = iso=>iso?new Date(iso).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—';
+const gB  = g=>g==='F'?`<span class="gb gbf">F</span>`:`<span class="gb gbm">M</span>`;
+
+/* Regola genere: 1 pref → libera (M o F); 2 pref → obbligatoriamente 1M + 1F */
+function genderErr(prefs,cands){
+  if(prefs.length<2)return null;
+  const gs=prefs.map(j=>(cands[j]?.genere||'M'));
+  const hasM=gs.includes('M'), hasF=gs.includes('F');
+  if(!hasM||!hasF){
+    return 'Con 2 preferenze devi scegliere 1 uomo e 1 donna';
+  }
+  return null;
+}
+function wouldViolate(j,prefs,cands){
+  if(prefs.length===0)return false;
+  const np=[...prefs,j];
+  const gs=np.map(k=>(cands[k]?.genere||'M'));
+  const hasM=gs.includes('M'),hasF=gs.includes('F');
+  if(np.length===2&&(!hasM||!hasF))return true;
+  return false;
+}
+
+function totals(d){
+  let vt=0,bi=0,nu=0,vc1=0,vc2=0,el=0,vd=0;const p1={},p2={};
+  for(let i=1;i<=N;i++){
+    const s=d[i]||defSez();
+    vt+=num(s.votanti);bi+=num(s.bianche);nu+=num(s.nulle);
+    vc1+=num(s.vc1);vc2+=num(s.vc2);el+=EL[i-1];vd+=num(s.vd);
+    for(let j=0;j<12;j++){
+      p1[j]=(p1[j]||0)+num(s.p1&&s.p1[j]);
+      p2[j]=(p2[j]||0)+num(s.p2&&s.p2[j]);
+    }
+  }
+  const tv=vc1+vc2;
+  return{vt,bi,nu,vc1,vc2,el,tv,p1,p2,vd,
+    aff:el>0?vt/el*100:0,pc1:tv>0?vc1/tv*100:0,pc2:tv>0?vc2/tv*100:0};
+}
+function killCharts(){Object.values(charts).forEach(c=>c?.destroy());charts={}}
+function goHome(){clearInterval(clockI);killCharts();showHome()}
+
+/* ══ LOGIN ══════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded',()=>{
+  $('pw-sub').textContent=COMUNE+' · '+DATA_EL;
+  $('pw-sez-g').innerHTML=Array.from({length:N},(_,i)=>
+    `<button onclick="selLoginSez(${i+1},this)"
+      style="padding:12px;border:1px solid var(--bd);border-radius:8px;background:var(--sf);cursor:pointer;font-family:inherit;font-size:16px;font-weight:700;transition:all .12s">
+      ${i+1}</button>`
+  ).join('');
+  // Inizializza strutture (verranno sovrascritte dal listener Firebase)
+  CANDS=defCands();
+  for(let i=1;i<=N;i++)allData[i]=defSez();
+  cacheLoad();
+  document.title='Elezioni — '+COMUNE;
+});
+
+function selRole(r,btn){
+  selRoleVal=r;
+  document.querySelectorAll('.rb').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  $('pw-sez').style.display=r==='rapp'?'block':'none';
+  selSezLogin=null;
+  document.querySelectorAll('#pw-sez-g button').forEach(b=>{b.style.borderColor='var(--bd)';b.style.background='var(--sf)'});
+}
+function selLoginSez(n,btn){
+  selSezLogin=n;
+  document.querySelectorAll('#pw-sez-g button').forEach(b=>{b.style.borderColor='var(--bd)';b.style.background='var(--sf)'});
+  btn.style.borderColor='var(--c1)';btn.style.background='var(--c1l)';
+}
+function checkPw(){
+  const pw=$('pw-inp').value.trim();const err=$('pw-err');err.textContent='';
+  if(selRoleVal==='coord'){
+    if(pw!==PIN_COORD){err.textContent='PIN errato';return}
+    userRole='coord';userSez=null;
+  }else{
+    if(!selSezLogin){err.textContent='Seleziona la tua sezione';return}
+    if(pw!==PIN_RAPP){err.textContent='PIN errato';return}
+    userRole='rapp';userSez=selSezLogin;
+  }
+  fbLogEvent({tipo:'login',ruolo:userRole,sezione:userSez});
+  $('pw-screen').style.display='none';$('app-root').style.display='block';
+  startBackupTimer();
+  showHome();
+}
+document.getElementById('pw-inp').addEventListener('keydown',e=>{if(e.key==='Enter')checkPw()});
+
+/* ══ HOME ═══════════════════════════════════════════════════ */
+function showHome(){
+  view='home';clearInterval(clockI);killCharts();
+  $('root').className='';
+  const done=Object.values(allData).filter(d=>d.done).length;
+  let btns='';
+  for(let i=1;i<=N;i++){
+    const s=allData[i]||defSez();
+    const dis=userRole==='rapp'&&userSez!==i;
+    btns+=`<div class="sc${s.done?' done':s.upd?' part':''}"
+      onclick="${dis?'':('goSez('+i+')')}"
+      style="${dis?'opacity:.32;cursor:not-allowed':''}">
+      <span class="sn">${i}${userRole==='rapp'&&userSez===i?'<span style="font-size:9px;color:var(--c1)"> ●</span>':''}</span>
+      <span class="ss">${s.done?'Completa':s.upd?num(s.votanti)+' sch.':'Attesa'}</span>
+    </div>`;
+  }
+  $('root').innerHTML=`
+    <div class="tb">
+      <div><div class="tb-t">${COMUNE}</div>
+      <div class="tb-s">${DATA_EL} · ${userRole==='coord'?'Coordinatore':'Sezione '+userSez} · <span class="conn-indicator conn ${isOnline?'':'off'}">${isOnline?'<span class="asdot"></span> online':'<span class="asdot off"></span> offline'}</span></div></div>
+      <span class="badge bok">${done}/${N} sez.</span>
+    </div>
+    ${userRole==='coord'?`
+    <button class="btn bp bw blg" style="margin-bottom:10px" onclick="showDash()">📊  Dashboard Generale</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <button class="btn" style="background:var(--c1l);color:var(--c1t);border-color:#A8CAEA;font-weight:600" onclick="showListDash(0)">
+        📋 ${listaNomi[0]}
+      </button>
+      <button class="btn" style="background:var(--c2l);color:var(--c2t);border-color:#EAB8A8;font-weight:600" onclick="showListDash(1)">
+        📋 ${listaNomi[1]}
+      </button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:1.25rem">
+      <button class="btn" onclick="showAdmin()">⚙️ Candidati</button>
+      <button class="btn" onclick="showBackups()">💾 Backup</button>
+      <button class="btn bg" onclick="exportCSV()">📊 CSV</button>
+    </div>`:''}
+    <p class="ct" style="margin-bottom:10px">Sezioni elettorali</p>
+    <div class="sg" style="margin-bottom:1.25rem">${btns}</div>
+    ${userRole==='coord'?`
+    <div class="card"><span class="ct">backup dati</span>
+      <div class="io">
+        <button class="btn" onclick="exportJSON()">📥 Esporta JSON</button>
+        <button class="btn bd2" onclick="resetAll()">🗑 Reset Tutto</button>
+      </div>
+    </div>`:`
+    <div class="card">
+      <span class="ct">info</span>
+      <p style="font-size:13px;color:var(--tx2);line-height:1.7">
+        Le schede che inserisci vengono salvate <strong>in tempo reale sul server Google</strong>.
+        Il coordinatore vede ogni voto entro 1-2 secondi.
+      </p>
+    </div>`}
+  `;
+}
+
+/* ══ SEZIONE — RIEPILOGO ════════════════════════════════════ */
+function goSez(i){
+  view='sez';selSez=i;lastBallot=null;
+  clearInterval(clockI);killCharts();
+  fd={...defSez(),...(allData[i]||{})};renSez();
+}
+function renSez(){
+  const d=fd,el=EL[selSez-1],tv=num(d.vc1)+num(d.vc2);
+  const topP=(p,ci,col)=>{
+    const items=Object.entries(p||{})
+      .map(([j,c])=>({n:(CANDS[ci]&&CANDS[ci][j]?.nome)||'Cand.'+(+j+1),c:num(c)}))
+      .filter(e=>e.c>0).sort((a,b)=>b.c-a.c).slice(0,5);
+    if(!items.length)return`<p style="font-size:12px;color:var(--tx3);padding:4px 0">Nessuna preferenza</p>`;
+    return items.map(e=>`<div class="sr"><span class="srl">${e.n}</span><span class="srv" style="color:${col}">${fn(e.c)}</span></div>`).join('');
+  };
+  $('root').innerHTML=`
+    <div class="tb">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn" onclick="goHome()">← Torna</button>
+        <div><div class="tb-t">Sezione ${selSez}</div>
+        <div class="tb-s">${el} elettori · ${fn(d.votanti)} schede</div></div>
+      </div>
+      ${d.done?'<span class="badge bok">Completata</span>':''}
+    </div>
+    <div class="kg">
+      <div class="kpi"><div class="kl">Schede</div><div class="kv">${fn(d.votanti)}</div><div class="ks">${el>0?(num(d.votanti)/el*100).toFixed(1):0}%</div></div>
+      <div class="kpi" style="background:var(--c1l);border-color:#A8CAEA">
+        <div class="kl" style="color:var(--c1m)">${C1.nome.split(' ')[1]}</div>
+        <div class="kv" style="color:var(--c1)">${fn(d.vc1)}</div>
+        <div class="ks" style="color:var(--c1m)">${tv>0?(num(d.vc1)/tv*100).toFixed(1)+'%':'—'}</div>
+      </div>
+      <div class="kpi" style="background:var(--c2l);border-color:#EAB8A8">
+        <div class="kl" style="color:var(--c2m)">${C2.nome.split(' ')[1]}</div>
+        <div class="kv" style="color:var(--c2)">${fn(d.vc2)}</div>
+        <div class="ks" style="color:var(--c2m)">${tv>0?(num(d.vc2)/tv*100).toFixed(1)+'%':'—'}</div>
+      </div>
+    </div>
+    <div id="sez-msg"></div>
+    <button class="btn bp bw blg" style="margin-bottom:8px" onclick="showBallot()">
+      + Inserisci scheda #${num(d.votanti)+1}
+    </button>
+    ${lastBallot?`<button class="btn bd2 bw" style="margin-bottom:12px" onclick="undoLast()">↩ Annulla ultimo voto</button>`:'<div style="height:12px"></div>'}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="card" style="margin:0"><span class="ct" style="color:var(--c1m)">${listaNomi[0]}</span>${topP(d.p1,0,'var(--c1)')}</div>
+      <div class="card" style="margin:0"><span class="ct" style="color:var(--c2m)">${listaNomi[1]}</span>${topP(d.p2,1,'var(--c2)')}</div>
+    </div>
+    <div class="card">
+      <div class="sr"><span class="srl">Bianche</span><span class="srv">${fn(d.bianche)}</span></div>
+      <div class="sr"><span class="srl">Nulle</span><span class="srv">${fn(d.nulle)}</span></div>
+      ${num(d.vd)>0?`<div class="sr"><span class="srl">Voti disgiunti</span><span class="srv" style="color:var(--am)">${fn(d.vd)}</span></div>`:''}
+      <div class="sr">
+        <span class="srl">Sync server</span>
+        <span style="font-size:12px;color:var(--tx3);display:flex;align-items:center;gap:5px">
+          <span class="asdot ${isOnline?'':'off'}"></span>${ft(d.upd)}
+        </span>
+      </div>
+    </div>
+    <button class="btn${d.done?' bg':''} bw" style="margin-top:4px" onclick="toggleDone()">
+      ${d.done?'✓ Completata — tocca per riaprire':'Segna sezione come completata'}
+    </button>
+  `;
+}
+async function toggleDone(){
+  fd.done=!fd.done;fd.upd=new Date().toISOString();
+  allData[selSez]=fd;cacheSave();
+  await fbSaveSez(selSez,fd);
+  fbLogEvent({tipo:fd.done?'sez_completa':'sez_riapri',sezione:selSez});
+  renSez();
+}
+
+/* ══ BALLOT ═════════════════════════════════════════════════ */
+function showBallot(){view='ballot';bData={tipo:null,sindaco:null,lista:null,prefs:[]};renBallot()}
+function backToSez(){view='sez';renSez()}
+
+function renBallot(){
+  const d=bData;
+  const ci=d.lista===1?0:d.lista===2?1:null;
+  const showS=d.tipo==='valida';
+  const showL=showS&&d.sindaco!==null;
+  const showP=showL&&d.lista!==null;
+  const isDis=d.sindaco!==null&&d.lista!==null&&d.sindaco!==d.lista;
+  const gErr=showP&&ci!==null?genderErr(d.prefs,CANDS[ci]):null;
+  const canConf=d.tipo==='bianca'||d.tipo==='nulla'||(showP&&!gErr);
+  const schN=num(fd.votanti)+1;
+
+  let prefHTML='';
+  if(showP&&ci!==null){
+    prefHTML=(CANDS[ci]||[]).map((c,j)=>{
+      const isSel=d.prefs.includes(j);
+      const isDis2=!isSel&&(d.prefs.length>=MPREF||wouldViolate(j,d.prefs,CANDS[ci]));
+      const rank=isSel?d.prefs.indexOf(j)+1:null;
+      const g=c?.genere||'M';
+      return`<button class="pb${isSel?(ci===0?' p1':' p2'):''}"
+        onclick="togPref(${j})"${isDis2?' disabled':''}>
+        ${isSel?`<span class="pnum ${ci===0?'n1':'n2'}">${rank}</span>`:'<span style="min-width:6px;flex-shrink:0"></span>'}
+        <span style="flex:1">${c.nome||('Candidato '+(j+1))}</span>
+        ${gB(g)}
+      </button>`;
+    }).join('');
+  }
+
+  $('root').innerHTML=`
+    <div class="tb">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn" onclick="backToSez()">← Indietro</button>
+        <div><div class="tb-t">Sezione ${selSez} — Scheda #${schN}</div>
+        <div class="tb-s">Inserimento voto</div></div>
+      </div>
+      ${isDis?'<span class="badge bdis">DISGIUNTO</span>':''}
+    </div>
+
+    <p class="sl" data-n="1">Tipo di scheda</p>
+    <div class="tg">
+      <button class="tb2${d.tipo==='valida'?' sv':''}" onclick="selTipo('valida')"><div class="ti">✓</div><div class="tl">Valida</div></button>
+      <button class="tb2${d.tipo==='bianca'?' sb':''}" onclick="selTipo('bianca')"><div class="ti">○</div><div class="tl">Bianca</div></button>
+      <button class="tb2${d.tipo==='nulla'?' sn2':''}" onclick="selTipo('nulla')"><div class="ti">✕</div><div class="tl">Nulla</div></button>
+    </div>
+
+    ${showS?`
+    <div class="sdiv"></div>
+    <p class="sl" data-n="2">Candidato Sindaco</p>
+    <div class="cpg">
+      <button class="cpb cc1${d.sindaco===1?' sel':''}" onclick="selSindaco(1)">
+        <div class="cpl">${listaNomi[0]}</div><div class="cpn">${C1.nome}</div>
+      </button>
+      <button class="cpb cc2${d.sindaco===2?' sel':''}" onclick="selSindaco(2)">
+        <div class="cpl">${listaNomi[1]}</div><div class="cpn">${C2.nome}</div>
+      </button>
+    </div>`:''}
+
+    ${showL?`
+    <div class="sdiv"></div>
+    <p class="sl" data-n="3">Lista per le preferenze
+      <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">— può differire dal sindaco</span>
+    </p>
+    <div class="cpg">
+      <button class="cpb cc1${d.lista===1?' sel':''}" onclick="selLista(1)">
+        <div class="cpl">${listaNomi[0]}</div>
+        <div class="cpn" style="font-size:12px">${d.sindaco===1?'stesso sindaco':'▲ voto disgiunto'}</div>
+      </button>
+      <button class="cpb cc2${d.lista===2?' sel':''}" onclick="selLista(2)">
+        <div class="cpl">${listaNomi[1]}</div>
+        <div class="cpn" style="font-size:12px">${d.sindaco===2?'stesso sindaco':'▲ voto disgiunto'}</div>
+      </button>
+    </div>
+    ${isDis?'<div class="no nwa" style="margin-top:-6px">Voto disgiunto: sindaco di una lista, preferenze dell\'altra lista</div>':''}`:''}
+
+    ${showP?`
+    <div class="sdiv"></div>
+    <p class="sl" data-n="4">Preferenze consiglieri
+      <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">opzionali · ${d.prefs.length}/${MPREF}</span>
+    </p>
+    <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+      ${gB('M')} uomo &nbsp; ${gB('F')} donna &nbsp;·&nbsp;
+      massimo 2 preferenze · se 2 → obbligatorio 1 uomo + 1 donna
+    </div>
+    <div class="pg">${prefHTML}</div>
+    ${gErr?`<div class="no ner">${gErr}</div>`:''}
+    ${d.prefs.length>=2&&!gErr?`<div class="no nok">Genere valido ✓</div>`:''}`:''}
+
+    <div style="margin-top:${showP?'4px':'1rem'}">
+      ${canConf
+        ?`<button class="btn bg bw blg" onclick="confirmBallot()">Conferma scheda #${schN}</button>`
+        :`<button class="btn bw blg" disabled>Seleziona il tipo per continuare</button>`}
+    </div>
+  `;
+}
+
+function selTipo(t){bData.tipo=t;if(t!=='valida'){bData.sindaco=null;bData.lista=null;bData.prefs=[];}renBallot()}
+function selSindaco(s){bData.sindaco=s;bData.lista=s;bData.prefs=[];renBallot()}
+function selLista(l){bData.lista=l;bData.prefs=[];renBallot()}
+function togPref(j){
+  const i=bData.prefs.indexOf(j);
+  if(i>=0)bData.prefs.splice(i,1);
+  else if(bData.prefs.length<MPREF)bData.prefs.push(j);
+  renBallot();
+}
+
+async function confirmBallot(){
+  const d=bData;
+  fd.votanti=(fd.votanti||0)+1;
+  if(d.tipo==='bianca')fd.bianche=(fd.bianche||0)+1;
+  else if(d.tipo==='nulla')fd.nulle=(fd.nulle||0)+1;
+  else{
+    if(d.sindaco===1)fd.vc1=(fd.vc1||0)+1;else fd.vc2=(fd.vc2||0)+1;
+    if(d.sindaco!==d.lista){
+      fd.vd=(fd.vd||0)+1;
+      if(d.sindaco===1)fd.vd12=(fd.vd12||0)+1;else fd.vd21=(fd.vd21||0)+1;
+    }
+    const pk=d.lista===1?'p1':'p2';
+    if(!fd[pk])fd[pk]={};
+    d.prefs.forEach(j=>{fd[pk][j]=(fd[pk][j]||0)+1});
+  }
+  lastBallot=JSON.parse(JSON.stringify(d));
+  fd.upd=new Date().toISOString();
+  allData[selSez]=fd;cacheSave();
+  await fbSaveSez(selSez,fd);
+  fbLogEvent({tipo:'scheda',sezione:selSez,tipoScheda:d.tipo,sindaco:d.sindaco,lista:d.lista,nPrefs:d.prefs.length,disgiunto:d.sindaco!==d.lista});
+  view='sez';renSez();
+  setTimeout(()=>{
+    const m=$('sez-msg');
+    if(m){
+      m.innerHTML=`<div class="no nok">Scheda #${num(fd.votanti)} salvata sul server${d.sindaco!==d.lista&&d.tipo==='valida'?' · voto disgiunto':''}</div>`;
+      setTimeout(()=>{if(m)m.innerHTML=''},2800);
+    }
+  },30);
+}
+
+async function undoLast(){
+  if(!lastBallot)return;const d=lastBallot;
+  fd.votanti=Math.max(0,(fd.votanti||0)-1);
+  if(d.tipo==='bianca')fd.bianche=Math.max(0,(fd.bianche||0)-1);
+  else if(d.tipo==='nulla')fd.nulle=Math.max(0,(fd.nulle||0)-1);
+  else{
+    if(d.sindaco===1)fd.vc1=Math.max(0,(fd.vc1||0)-1);else fd.vc2=Math.max(0,(fd.vc2||0)-1);
+    if(d.sindaco!==d.lista){
+      fd.vd=Math.max(0,(fd.vd||0)-1);
+      if(d.sindaco===1)fd.vd12=Math.max(0,(fd.vd12||0)-1);else fd.vd21=Math.max(0,(fd.vd21||0)-1);
+    }
+    const pk=d.lista===1?'p1':'p2';
+    if(fd[pk])d.prefs.forEach(j=>{if(fd[pk][j]!==undefined)fd[pk][j]=Math.max(0,fd[pk][j]-1)});
+  }
+  lastBallot=null;fd.upd=new Date().toISOString();
+  allData[selSez]=fd;cacheSave();
+  await fbSaveSez(selSez,fd);
+  fbLogEvent({tipo:'undo',sezione:selSez});
+  renSez();
+}
+
+/* ══ ADMIN — CANDIDATI E LISTE ══════════════════════════════ */
+function showAdmin(){
+  view='admin';
+  const mkRows=(list,idx)=>list.map((c,j)=>`
+    <div class="ar">
+      <span class="idx">${j+1}.</span>
+      <input class="ism" id="c_${idx}_${j}" type="text" value="${c.nome||''}" placeholder="Nome ${j+1}" style="flex:1">
+      <div class="gtog">
+        <button id="gm_${idx}_${j}" onclick="setG(${idx},${j},'M')" class="${(c.genere||'M')==='M'?'am':''}">M</button>
+        <button id="gf_${idx}_${j}" onclick="setG(${idx},${j},'F')" class="${(c.genere||'M')==='F'?'af':''}">F</button>
+      </div>
+    </div>`
+  ).join('');
+
+  $('root').innerHTML=`
+    <div class="tb">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn" onclick="goHome()">← Torna</button>
+        <div><div class="tb-t">Candidati e Liste</div><div class="tb-s">Sincronizzato su tutti i dispositivi</div></div>
+      </div>
+    </div>
+    <div id="admin-msg"></div>
+    <div class="card">
+      <span class="ct">nomi delle liste</span>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <p style="font-size:11px;color:var(--c1m);margin-bottom:5px">${C1.nome}</p>
+          <input class="ism" id="ln0" type="text" value="${listaNomi[0]}">
+        </div>
+        <div>
+          <p style="font-size:11px;color:var(--c2m);margin-bottom:5px">${C2.nome}</p>
+          <input class="ism" id="ln1" type="text" value="${listaNomi[1]}">
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div class="card" style="margin:0">
+        <span class="ct" style="color:var(--c1m)">${listaNomi[0]}</span>
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;display:flex;gap:6px;align-items:center">
+          ${gB('M')} maschile &nbsp; ${gB('F')} femminile
+        </div>
+        ${mkRows(CANDS[0],0)}
+      </div>
+      <div class="card" style="margin:0">
+        <span class="ct" style="color:var(--c2m)">${listaNomi[1]}</span>
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;display:flex;gap:6px;align-items:center">
+          ${gB('M')} maschile &nbsp; ${gB('F')} femminile
+        </div>
+        ${mkRows(CANDS[1],1)}
+      </div>
+    </div>
+    <button class="btn bg bw blg" onclick="saveAdmin()">Salva e sincronizza</button>
+  `;
+}
+function setG(idx,j,g){
+  CANDS[idx][j].genere=g;
+  const bm=$(`gm_${idx}_${j}`),bf=$(`gf_${idx}_${j}`);
+  if(bm)bm.className=g==='M'?'am':'';if(bf)bf.className=g==='F'?'af':'';
+}
+async function saveAdmin(){
+  const l0=$('ln0'),l1=$('ln1');
+  if(l0)listaNomi[0]=l0.value.trim()||C1.lista;
+  if(l1)listaNomi[1]=l1.value.trim()||C2.lista;
+  for(let idx=0;idx<2;idx++)for(let j=0;j<12;j++){
+    const el=$(`c_${idx}_${j}`);if(el)CANDS[idx][j].nome=el.value.trim()||('Candidato '+(j+1));
+  }
+  cacheSave();
+  await fbSaveCfg();
+  fbLogEvent({tipo:'admin_save'});
+  const m=$('admin-msg');
+  if(m){m.innerHTML='<div class="no nok">Salvato e sincronizzato su tutti i dispositivi</div>';setTimeout(()=>{if(m)m.innerHTML=''},2500)}
+}
+
+/* ══ DASHBOARD ══════════════════════════════════════════════ */
+function showDash(){
+  view='dash';killCharts();renDash();
+}
+function tblRows(d){
+  return Array.from({length:N},(_,i)=>{
+    const s=d[i+1]||defSez(),el=EL[i],tv=num(s.vc1)+num(s.vc2);
+    const af=el>0?(num(s.votanti)/el*100).toFixed(1):'0.0';
+    const p1=tv>0?(num(s.vc1)/tv*100).toFixed(1):'—',p2=tv>0?(num(s.vc2)/tv*100).toFixed(1):'—';
+    const bg=s.done?`<span class="badge bok">Completa</span>`:s.upd?`<span class="badge bwip">${ft(s.upd)}</span>`:`<span class="badge bwt">Attesa</span>`;
+    return`<tr><td style="font-weight:600">${i+1}</td><td>${fn(s.votanti)}</td>
+      <td style="color:var(--c1)">${fn(s.vc1)} <small style="color:var(--tx3)">${tv>0?'('+p1+'%)':''}</small></td>
+      <td style="color:var(--c2)">${fn(s.vc2)} <small style="color:var(--tx3)">${tv>0?'('+p2+'%)':''}</small></td>
+      <td>${af}%</td><td>${num(s.vd)>0?`<span style="color:var(--am)">${fn(s.vd)}</span>`:'—'}</td><td>${bg}</td></tr>`;
+  }).join('');
+}
+function renDash(){
+  const t=totals(allData),done=Object.values(allData).filter(d=>d.done).length;
+  $('root').className='wide';
+  $('root').innerHTML=`
+    <div class="tb">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn" onclick="goHome()">← Torna</button>
+        <div><div class="tb-t">${COMUNE} — Dashboard</div>
+        <div class="tb-s">Aggiornamento in tempo reale · <span id="live-clk"></span> · <span class="conn-indicator conn ${isOnline?'':'off'}">${isOnline?'<span class="asdot"></span> online':'<span class="asdot off"></span> offline'}</span></div></div>
+      </div>
+    </div>
+    <div class="kg">
+      <div class="kpi"><div class="kl">Affluenza</div><div class="kv" id="d-aff" style="color:var(--c1)">${pct(t.aff)}</div><div class="ks">${fn(t.vt)} / ${fn(t.el)}</div></div>
+      <div class="kpi"><div class="kl">Voti validi</div><div class="kv" id="d-vv">${fn(t.tv)}</div><div class="ks" id="d-bnu">${fn(t.bi)} bianche · ${fn(t.nu)} nulle</div></div>
+      <div class="kpi"><div class="kl">Sezioni</div><div class="kv" id="d-sez">${done}<span style="font-size:14px;font-weight:400;color:var(--tx3)"> /${N}</span></div><div class="ks">${fn(t.vd)} disgiunti</div></div>
+    </div>
+    <div class="cg">
+      <div class="cb cb1"><div class="cl2">${listaNomi[0]}</div><div class="cn">${C1.nome}</div><div class="cv" id="d-vc1">${fn(t.vc1)}</div><div class="cp" id="d-pc1">${pct(t.pc1)} dei validi</div><div class="pt"><div class="pf" id="d-b1" style="background:var(--c1);width:${pct(t.pc1)}"></div></div></div>
+      <div class="cb cb2"><div class="cl2">${listaNomi[1]}</div><div class="cn">${C2.nome}</div><div class="cv" id="d-vc2">${fn(t.vc2)}</div><div class="cp" id="d-pc2">${pct(t.pc2)} dei validi</div><div class="pt"><div class="pf" id="d-b2" style="background:var(--c2);width:${pct(t.pc2)}"></div></div></div>
+    </div>
+    ${t.vd>0?`<div class="no nwa" style="margin-bottom:10px">Voti disgiunti totali: <strong>${fn(t.vd)}</strong></div>`:''}
+    <div class="card"><span class="ct">confronto per sezione</span><canvas id="ch-sez" height="120"></canvas></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="card" style="margin:0"><span class="ct" style="color:var(--c1m)">preferenze — ${listaNomi[0]}</span><canvas id="ch-p1" height="200"></canvas></div>
+      <div class="card" style="margin:0"><span class="ct" style="color:var(--c2m)">preferenze — ${listaNomi[1]}</span><canvas id="ch-p2" height="200"></canvas></div>
+    </div>
+    <div class="card"><span class="ct">dettaglio sezioni</span>
+      <table class="tbl">
+        <thead><tr><th>Sez.</th><th>Votanti</th><th style="color:var(--c1m)">${C1.nome.split(' ')[1]}</th><th style="color:var(--c2m)">${C2.nome.split(' ')[1]}</th><th>Aff.%</th><th style="color:var(--am)">Disg.</th><th>Stato</th></tr></thead>
+        <tbody id="d-tb">${tblRows(allData)}</tbody>
+      </table>
+    </div>
+    <div class="io" style="margin-top:8px">
+      <button class="btn bg" onclick="exportCSV()">📊 Esporta CSV</button>
+      <button class="btn" onclick="exportJSON()">📥 JSON</button>
+    </div>
+  `;
+  startClock();initCharts();
+}
+function initCharts(){
+  const t=totals(allData);
+  const ctx1=$('ch-sez');if(!ctx1)return;
+  if(charts.sz)charts.sz.destroy();
+  charts.sz=new Chart(ctx1,{type:'bar',data:{labels:Array.from({length:N},(_,i)=>'Sez.'+(i+1)),datasets:[
+    {label:C1.nome,data:Array.from({length:N},(_,i)=>num((allData[i+1]||defSez()).vc1)),backgroundColor:'#1B5299',borderRadius:4,borderSkipped:false},
+    {label:C2.nome,data:Array.from({length:N},(_,i)=>num((allData[i+1]||defSez()).vc2)),backgroundColor:'#B84020',borderRadius:4,borderSkipped:false}
+  ]},options:{responsive:true,plugins:{legend:{labels:{font:{size:11},boxWidth:12,color:'#666',padding:14}}},
+  scales:{x:{grid:{display:false},ticks:{font:{size:11},color:'#888'}},y:{grid:{color:'rgba(0,0,0,.06)'},ticks:{font:{size:11},color:'#888'}}}}});
+  const s1=CANDS[0].map((c,j)=>({n:(c.nome||'').split(' ').pop()||('C'+(j+1)),v:t.p1[j]||0})).sort((a,b)=>b.v-a.v);
+  const s2=CANDS[1].map((c,j)=>({n:(c.nome||'').split(' ').pop()||('C'+(j+1)),v:t.p2[j]||0})).sort((a,b)=>b.v-a.v);
+  const mkP=(id,data,col)=>{const ctx=$(id);if(!ctx)return null;return new Chart(ctx,{type:'bar',data:{labels:data.map(x=>x.n),datasets:[{data:data.map(x=>x.v),backgroundColor:col,borderRadius:3,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(0,0,0,.06)'},ticks:{font:{size:10},color:'#888'}},y:{grid:{display:false},ticks:{font:{size:10},color:'#555'}}}}});};
+  charts.p1=mkP('ch-p1',s1,'#1B5299');charts.p2=mkP('ch-p2',s2,'#B84020');
+}
+function updDash(){
+  if(view!=='dash')return;
+  const t=totals(allData),done=Object.values(allData).filter(d=>d.done).length;
+  const set=(id,v)=>{const e=$(id);if(e)e.textContent=v};const setH=(id,v)=>{const e=$(id);if(e)e.innerHTML=v};
+  set('d-aff',pct(t.aff));set('d-vv',fn(t.tv));set('d-bnu',fn(t.bi)+' bianche · '+fn(t.nu)+' nulle');
+  setH('d-sez',`${done}<span style="font-size:14px;font-weight:400;color:var(--tx3)"> /${N}</span>`);
+  set('d-vc1',fn(t.vc1));set('d-pc1',pct(t.pc1)+' dei validi');set('d-vc2',fn(t.vc2));set('d-pc2',pct(t.pc2)+' dei validi');
+  const b1=$('d-b1');if(b1)b1.style.width=pct(t.pc1);const b2=$('d-b2');if(b2)b2.style.width=pct(t.pc2);
+  const tb=$('d-tb');if(tb)tb.innerHTML=tblRows(allData);
+  if(charts.sz){charts.sz.data.datasets[0].data=Array.from({length:N},(_,i)=>num((allData[i+1]||defSez()).vc1));charts.sz.data.datasets[1].data=Array.from({length:N},(_,i)=>num((allData[i+1]||defSez()).vc2));charts.sz.update('none')}
+  const upd=(ch,cands,pk)=>{if(!ch)return;const s=cands.map((c,j)=>({n:(c.nome||'').split(' ').pop()||('C'+(j+1)),v:t[pk][j]||0})).sort((a,b)=>b.v-a.v);ch.data.labels=s.map(x=>x.n);ch.data.datasets[0].data=s.map(x=>x.v);ch.update('none')};
+  upd(charts.p1,CANDS[0],'p1');upd(charts.p2,CANDS[1],'p2');
+}
+function startClock(){clearInterval(clockI);const f=()=>{const e=$('live-clk');if(e)e.textContent=new Date().toLocaleTimeString('it-IT')};f();clockI=setInterval(f,1000)}
+
+/* ══ DASHBOARD PER LISTA ════════════════════════════════════ */
+let listDashIdx=null;
+
+function showListDash(idx){
+  view='listdash';listDashIdx=idx;killCharts();renListDash();
+}
+
+function renListDash(){
+  const idx=listDashIdx;
+  const listName=listaNomi[idx];
+  const cands=CANDS[idx]||[];
+  const candNome=idx===0?C1.nome:C2.nome;
+  const col=idx===0?'var(--c1)':'var(--c2)';
+  const colMid=idx===0?'var(--c1m)':'var(--c2m)';
+  const colBg=idx===0?'var(--c1l)':'var(--c2l)';
+  const colHex=idx===0?'#1B5299':'#B84020';
+  const pk=idx===0?'p1':'p2';
+
+  const t=totals(allData);
+  const prefsByCand=idx===0?t.p1:t.p2;
+
+  // Array con dati arricchiti per ogni candidato
+  const enriched=cands.map((c,j)=>{
+    const sezionData=Array.from({length:N},(_,i)=>num((allData[i+1]||defSez())[pk]&&(allData[i+1]||defSez())[pk][j]));
+    return {
+      j, nome:c.nome||('Candidato '+(j+1)), genere:c.genere||'M',
+      totale:prefsByCand[j]||0,
+      sezioni:sezionData
+    };
+  });
+
+  // Ordina per preferenze decrescenti
+  const sorted=[...enriched].sort((a,b)=>b.totale-a.totale);
+  const totPref=sorted.reduce((sum,c)=>sum+c.totale,0);
+
+  // Tabella candidato x sezione
+  const tblHdr=['Pos','Candidato','Gen','Tot','%',...Array.from({length:N},(_,i)=>'Sez.'+(i+1))];
+  const tblRows=sorted.map((c,pos)=>{
+    const pctTot=totPref>0?(c.totale/totPref*100).toFixed(1)+'%':'—';
+    const cells=[
+      `<td style="font-weight:600;color:var(--tx3);font-family:'DM Mono',monospace">${pos+1}</td>`,
+      `<td style="font-weight:500">${c.nome}</td>`,
+      `<td>${gB(c.genere)}</td>`,
+      `<td style="font-weight:700;color:${col};font-family:'DM Mono',monospace">${fn(c.totale)}</td>`,
+      `<td style="color:var(--tx3);font-family:'DM Mono',monospace;font-size:11px">${pctTot}</td>`,
+      ...c.sezioni.map(v=>`<td style="font-family:'DM Mono',monospace;${v>0?'':'color:var(--tx3)'}">${v>0?fn(v):'—'}</td>`)
+    ];
+    return `<tr>${cells.join('')}</tr>`;
+  }).join('');
+
+  // Totali per sezione
+  const sezTotals=Array.from({length:N},(_,i)=>sorted.reduce((sum,c)=>sum+c.sezioni[i],0));
+  const totalRow=`<tr style="background:${colBg};font-weight:600">
+    <td></td>
+    <td style="color:${colMid}">TOTALE</td>
+    <td></td>
+    <td style="color:${col};font-family:'DM Mono',monospace">${fn(totPref)}</td>
+    <td></td>
+    ${sezTotals.map(v=>`<td style="color:${colMid};font-family:'DM Mono',monospace">${fn(v)}</td>`).join('')}
+  </tr>`;
+
+  // Top 5 cards
+  const top5=sorted.slice(0,5);
+  const top5HTML=top5.map((c,pos)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${colBg};border:1px solid ${idx===0?'#A8CAEA':'#EAB8A8'};border-radius:var(--rs);margin-bottom:6px">
+      <span style="min-width:24px;height:24px;border-radius:50%;background:${col};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;font-family:'DM Mono',monospace">${pos+1}</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:${idx===0?'var(--c1t)':'var(--c2t)'}">${c.nome}</div>
+        <div style="font-size:11px;color:${colMid};display:flex;align-items:center;gap:5px">${gB(c.genere)} ${totPref>0?(c.totale/totPref*100).toFixed(1)+'% della lista':''}</div>
+      </div>
+      <div style="font-size:20px;font-weight:700;color:${col};font-family:'DM Mono',monospace">${fn(c.totale)}</div>
+    </div>
+  `).join('');
+
+  $('root').className='wide';
+  $('root').innerHTML=`
+    <div class="tb">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn" onclick="goHome()">← Torna</button>
+        <div>
+          <div class="tb-t" style="color:${colMid}">${listName}</div>
+          <div class="tb-s">${candNome} · ${fn(totPref)} preferenze totali · <span id="live-clk"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="card" style="margin:0">
+        <span class="ct" style="color:${colMid}">classifica preferenze</span>
+        <canvas id="ch-list" height="260"></canvas>
+      </div>
+      <div class="card" style="margin:0">
+        <span class="ct" style="color:${colMid}">top 5</span>
+        ${top5HTML||'<p style="font-size:12px;color:var(--tx3)">Nessuna preferenza ancora registrata</p>'}
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="ct" style="color:${colMid}">dettaglio candidato × sezione</span>
+      <div style="overflow-x:auto">
+        <table class="tbl" style="min-width:700px">
+          <thead><tr>${tblHdr.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+          <tbody>${tblRows}${totalRow}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="io" style="margin-top:8px">
+      <button class="btn bg" onclick="exportListCSV(${idx})">📊 Esporta CSV lista</button>
+      <button class="btn" onclick="showDash()">Dashboard Generale</button>
+      <button class="btn" onclick="showListDash(${idx===0?1:0})">Dashboard ${listaNomi[idx===0?1:0]}</button>
+    </div>
+  `;
+
+  startClock();
+
+  // Chart orizzontale con tutti i 12 candidati
+  const ctx=$('ch-list');
+  if(ctx){
+    if(charts.list)charts.list.destroy();
+    charts.list=new Chart(ctx,{type:'bar',
+      data:{
+        labels:sorted.map(c=>c.nome.length>20?c.nome.slice(0,18)+'…':c.nome),
+        datasets:[{data:sorted.map(c=>c.totale),backgroundColor:colHex,borderRadius:3,borderSkipped:false}]
+      },
+      options:{indexAxis:'y',responsive:true,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${fn(ctx.parsed.x)} preferenze`}}},
+        scales:{
+          x:{grid:{color:'rgba(0,0,0,.06)'},ticks:{font:{size:11},color:'#888'}},
+          y:{grid:{display:false},ticks:{font:{size:11},color:'#444'}}
+        }
+      }
+    });
+  }
+}
+
+function exportListCSV(idx){
+  const listName=listaNomi[idx];
+  const cands=CANDS[idx]||[];
+  const pk=idx===0?'p1':'p2';
+  const t=totals(allData);
+  const prefsByCand=idx===0?t.p1:t.p2;
+  const q=v=>`"${String(v).replace(/"/g,'""')}"`;
+
+  const enriched=cands.map((c,j)=>({
+    nome:c.nome||('Candidato '+(j+1)),genere:c.genere||'M',totale:prefsByCand[j]||0,
+    sezioni:Array.from({length:N},(_,i)=>num((allData[i+1]||defSez())[pk]&&(allData[i+1]||defSez())[pk][j]))
+  })).sort((a,b)=>b.totale-a.totale);
+
+  const rows=[];
+  rows.push(['LISTA '+listName+' — '+COMUNE,'Data: '+DATA_EL,'Generato: '+new Date().toLocaleString('it-IT')].join(','));
+  rows.push('');
+  rows.push(['Posizione','Candidato','Genere','Totale',...Array.from({length:N},(_,i)=>'Sez.'+(i+1))].join(','));
+  enriched.forEach((c,pos)=>{
+    rows.push([pos+1,q(c.nome),c.genere,c.totale,...c.sezioni].join(','));
+  });
+
+  const csv='\uFEFF'+rows.join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download='lista_'+listName.toLowerCase().replace(/\s+/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  fbLogEvent({tipo:'export_lista_csv',lista:idx});
+}
+
+/* ══ EXPORT CSV ═════════════════════════════════════════════ */
+function exportCSV(){
+  const d=allData,t=totals(d),q=v=>`"${String(v).replace(/"/g,'""')}"`;
+  const rows=[];
+  rows.push(['ELEZIONI COMUNALI — '+COMUNE,'Data: '+DATA_EL,'Generato: '+new Date().toLocaleString('it-IT')].join(','));
+  rows.push('');rows.push('=== RIEPILOGO GENERALE ===');
+  rows.push(['Elettori totali',t.el,''].join(','));rows.push(['Votanti',t.vt,pct(t.aff)+' affluenza'].join(','));
+  rows.push(['Bianche',t.bi,''].join(','));rows.push(['Nulle',t.nu,''].join(','));
+  rows.push(['Voti validi sindaco',t.tv,''].join(','));rows.push(['Voti disgiunti',t.vd,''].join(','));
+  rows.push('');rows.push('=== VOTI SINDACO ===');
+  rows.push([q(C1.nome+' ('+listaNomi[0]+')'),t.vc1,pct(t.pc1)].join(','));
+  rows.push([q(C2.nome+' ('+listaNomi[1]+')'),t.vc2,pct(t.pc2)].join(','));
+  rows.push('');rows.push('=== DETTAGLIO PER SEZIONE ===');
+  rows.push(['Sezione','Elettori','Votanti','Affluenza%','Bianche','Nulle',q(C1.nome),q(C2.nome),'Disgiunti','Stato'].join(','));
+  for(let i=1;i<=N;i++){
+    const s=d[i]||defSez(),el=EL[i-1],af=el>0?(num(s.votanti)/el*100).toFixed(2):'0.00';
+    rows.push([i,el,num(s.votanti),af,num(s.bianche),num(s.nulle),num(s.vc1),num(s.vc2),num(s.vd),s.done?'Completata':s.upd?'Parziale':'Attesa'].join(','));
+  }
+  for(let li=0;li<2;li++){
+    rows.push('');rows.push(`=== PREFERENZE LISTA ${listaNomi[li]} ===`);
+    rows.push(['Candidato','Genere','Totale',...Array.from({length:N},(_,i)=>'Sez.'+(i+1))].join(','));
+    for(let j=0;j<12;j++){
+      const cand=CANDS[li][j]||{nome:'Candidato '+(j+1),genere:'M'};
+      const pk=li===0?'p1':'p2';
+      const sv=Array.from({length:N},(_,i)=>num((d[i+1]||defSez())[pk]&&(d[i+1]||defSez())[pk][j]));
+      rows.push([q(cand.nome),cand.genere||'M',sv.reduce((a,b)=>a+b,0),...sv].join(','));
+    }
+  }
+  const csv='\uFEFF'+rows.join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download='risultati_'+COMUNE.toLowerCase()+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  fbLogEvent({tipo:'export_csv'});
+}
+function exportJSON(){
+  const exp={};for(let i=1;i<=N;i++)exp['sez_'+i]=allData[i]||defSez();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({comune:COMUNE,exportedAt:new Date().toISOString(),sezioni:exp,cands:CANDS,liste:listaNomi},null,2)],{type:'application/json'}));
+  a.download='elezioni_'+COMUNE.toLowerCase()+'_'+new Date().toISOString().slice(0,10)+'.json';a.click();
+  fbLogEvent({tipo:'export_json'});
+}
+async function resetAll(){
+  if(!confirm('Cancellare TUTTI i dati di scrutinio dal SERVER? Azione irreversibile e impatta TUTTI i dispositivi.'))return;
+  if(!confirm('Ultima conferma: questo cancella i dati da tutti i dispositivi collegati. Un backup di sicurezza verrà creato automaticamente prima del reset. Continuo?'))return;
+  makeBackup('pre-reset');
+  for(let i=1;i<=N;i++){await fbSaveSez(i,defSez())}
+  fbLogEvent({tipo:'reset_all'});
+  alert('Dati azzerati. Un backup è disponibile nella sezione Backup per il ripristino.');
+  goHome();
+}
+
+// Espone funzioni globali per onclick inline
+window.selRole=selRole;window.selLoginSez=selLoginSez;window.checkPw=checkPw;
+window.goHome=goHome;window.goSez=goSez;window.showDash=showDash;window.showAdmin=showAdmin;
+window.showBallot=showBallot;window.backToSez=backToSez;window.selTipo=selTipo;window.selSindaco=selSindaco;
+window.selLista=selLista;window.togPref=togPref;window.confirmBallot=confirmBallot;window.undoLast=undoLast;
+window.toggleDone=toggleDone;window.setG=setG;window.saveAdmin=saveAdmin;
+window.exportCSV=exportCSV;window.exportJSON=exportJSON;window.resetAll=resetAll;
+window.showListDash=showListDash;window.exportListCSV=exportListCSV;
+window.showBackups=showBackups;window.makeBackup=makeBackup;window.restoreBackup=restoreBackup;
+window.downloadBackup=downloadBackup;window.deleteBackup=deleteBackup;
+</script>
+</body>
+</html>
