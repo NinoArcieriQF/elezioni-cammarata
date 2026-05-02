@@ -136,7 +136,7 @@ const N       = 6;      // numero sezioni
 const MPREF   = 2;      // max preferenze per scheda
 
 // Numero elettori per sezione (N valori) — sostituisci con dati reali
-const EL = [680, 995, 702, 655, 852, 985];
+const EL = [620, 584, 601, 557, 612, 590];
 
 // Candidati sindaco
 const C1 = { nome: 'Giuseppe Mangiapane', lista: 'Costruire Orizzonti' };
@@ -521,6 +521,111 @@ function buildShortLabels(candList){
   });
 }
 
+/* ══ MENU RAPIDO RAPPRESENTANTE ════════════════════════════
+   Triggered from "⋯" icon in ballot view
+═══════════════════════════════════════════════════════════ */
+function showRappMenu(){
+  const hasUndo=fd.lastBallots&&fd.lastBallots.length>0;
+  const sezDone=fd.done;
+  showModal(`
+    <div style="padding:1.5rem">
+      <p style="font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:4px">Sezione ${selSez}</p>
+      <p style="font-size:16px;font-weight:700;margin-bottom:14px">Menu rapido</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn ${hasUndo?'bd2':''}" ${hasUndo?'':'disabled'} style="justify-content:flex-start;padding:14px" onclick="closeModal();undoLast()">
+          ↩ &nbsp; Annulla ultima scheda
+        </button>
+        <button class="btn ${hasUndo?'':''}" ${hasUndo?'':'disabled'} style="justify-content:flex-start;padding:14px" onclick="closeModal();showStoricoSchede()">
+          📋 &nbsp; Storico ultime schede
+        </button>
+        <button class="btn" style="justify-content:flex-start;padding:14px" onclick="closeModal();showSezStats()">
+          📊 &nbsp; Statistiche sezione
+        </button>
+        <button class="btn${sezDone?' bg':''}" style="justify-content:flex-start;padding:14px" onclick="closeModal();toggleDone()">
+          ${sezDone?'↺ &nbsp; Riapri sezione':'✓ &nbsp; Marca sezione completata'}
+        </button>
+        <button class="btn" style="justify-content:flex-start;padding:14px" onclick="closeModal();goHome()">
+          🏠 &nbsp; Torna alla home
+        </button>
+      </div>
+      <button class="btn bw" style="margin-top:12px;padding:10px" onclick="closeModal()">Chiudi menu</button>
+    </div>
+  `);
+}
+
+/* ══ STATISTICHE SEZIONE (rappresentante e admin/coord) ══
+   Vista solo lettura riassuntiva della propria sezione
+═══════════════════════════════════════════════════════════ */
+function showSezStats(){
+  const d=fd,el=EL[selSez-1];
+  const tv=num(d.vc1)+num(d.vc2);
+  const tvl=num(d.vl1)+num(d.vl2);
+  const topP=(p,ci,col)=>{
+    const items=Object.entries(p||{})
+      .map(([j,c])=>({n:(CANDS[ci]&&CANDS[ci][j]?.nome)||'Cand.'+(+j+1),c:num(c)}))
+      .filter(e=>e.c>0).sort((a,b)=>b.c-a.c).slice(0,5);
+    if(!items.length)return`<p style="font-size:12px;color:var(--tx3);padding:4px 0">Nessuna preferenza</p>`;
+    return items.map(e=>`<div class="sr"><span class="srl">${e.n}</span><span class="srv" style="color:${col}">${fn(e.c)}</span></div>`).join('');
+  };
+
+  showModal(`
+    <div style="padding:1.5rem;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div>
+          <p style="font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px">Statistiche sezione ${selSez}</p>
+          <p style="font-size:18px;font-weight:700">${fn(d.votanti)} schede inserite</p>
+          <p style="font-size:12px;color:var(--tx3);font-family:'DM Mono',monospace">${el} elettori · ${el>0?(num(d.votanti)/el*100).toFixed(1):0}% affluenza</p>
+        </div>
+        <button class="btn" onclick="closeModal()" style="padding:7px 11px">✕</button>
+      </div>
+
+      <div class="kg" style="grid-template-columns:1fr 1fr;margin-bottom:8px">
+        <div class="kpi"><div class="kl">Bianche</div><div class="kv" style="font-size:20px">${fn(d.bianche)}</div></div>
+        <div class="kpi"><div class="kl">Nulle</div><div class="kv" style="font-size:20px">${fn(d.nulle)}</div></div>
+      </div>
+
+      <p class="ct" style="margin-top:12px;margin-bottom:6px">voti sindaco</p>
+      <div class="kg" style="grid-template-columns:1fr 1fr;margin-bottom:8px">
+        <div class="kpi" style="background:var(--c1l);border-color:#A8CAEA">
+          <div class="kl" style="color:var(--c1m);font-size:9px">${C1.nome}</div>
+          <div class="kv" style="color:var(--c1)">${fn(d.vc1)}</div>
+          <div class="ks" style="color:var(--c1m)">${tv>0?(num(d.vc1)/tv*100).toFixed(1)+'%':'—'}</div>
+        </div>
+        <div class="kpi" style="background:var(--c2l);border-color:#EAB8A8">
+          <div class="kl" style="color:var(--c2m);font-size:9px">${C2.nome}</div>
+          <div class="kv" style="color:var(--c2)">${fn(d.vc2)}</div>
+          <div class="ks" style="color:var(--c2m)">${tv>0?(num(d.vc2)/tv*100).toFixed(1)+'%':'—'}</div>
+        </div>
+      </div>
+
+      <p class="ct" style="margin-top:12px;margin-bottom:6px">voti lista</p>
+      <div class="kg" style="grid-template-columns:1fr 1fr;margin-bottom:8px">
+        <div class="kpi" style="background:var(--c1l);border-color:#A8CAEA">
+          <div class="kl" style="color:var(--c1m);font-size:9px">${listaNomi[0]}</div>
+          <div class="kv" style="color:var(--c1)">${fn(d.vl1)}</div>
+          <div class="ks" style="color:var(--c1m)">${tvl>0?(num(d.vl1)/tvl*100).toFixed(1)+'%':'—'}</div>
+        </div>
+        <div class="kpi" style="background:var(--c2l);border-color:#EAB8A8">
+          <div class="kl" style="color:var(--c2m);font-size:9px">${listaNomi[1]}</div>
+          <div class="kv" style="color:var(--c2)">${fn(d.vl2)}</div>
+          <div class="ks" style="color:var(--c2m)">${tvl>0?(num(d.vl2)/tvl*100).toFixed(1)+'%':'—'}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <div><p class="ct" style="color:var(--c1m);margin-bottom:6px">Pref · ${listaNomi[0]}</p>${topP(d.p1,0,'var(--c1)')}</div>
+        <div><p class="ct" style="color:var(--c2m);margin-bottom:6px">Pref · ${listaNomi[1]}</p>${topP(d.p2,1,'var(--c2)')}</div>
+      </div>
+
+      ${num(d.vd)>0?`<div class="no nwa" style="margin-top:10px;font-size:12px">Voti disgiunti: <strong>${fn(d.vd)}</strong></div>`:''}
+
+      <p style="font-size:10px;color:var(--tx3);text-align:center;margin-top:14px">Sync: ${ft(d.upd)}</p>
+
+      <button class="btn bp bw" style="margin-top:12px" onclick="closeModal()">↩ Torna allo scrutinio</button>
+    </div>
+  `);
+}
+
 /* ══ PROIEZIONE CONSIGLIO COMUNALE ══════════════════════════
    Regola Cammarata (comune <15k):
    - SINDACO eletto = max(vc1, vc2)
@@ -766,7 +871,12 @@ function checkPw(){
   fbLogEvent({tipo:'login',ruolo:userRole,sezione:userSez});
   $('pw-screen').style.display='none';$('app-root').style.display='block';
   startBackupTimer();
-  showHome();
+  // Rappresentanti: vai direttamente nella loro sezione (modalità scrutinio)
+  if(userRole==='rapp' && userSez){
+    goSez(userSez);
+  } else {
+    showHome();
+  }
 }
 document.getElementById('pw-inp').addEventListener('keydown',e=>{if(e.key==='Enter')checkPw()});
 
@@ -841,9 +951,18 @@ function showHome(){
 
 /* ══ SEZIONE — RIEPILOGO ════════════════════════════════════ */
 function goSez(i){
-  view='sez';selSez=i;lastBallot=null;
+  selSez=i;lastBallot=null;
   clearInterval(clockI);killCharts();
-  fd={...defSez(),...(allData[i]||{})};renSez();
+  fd={...defSez(),...(allData[i]||{})};
+  // Rappresentanti vanno direttamente in modalità scrutinio
+  if(userRole==='rapp'){
+    view='ballot';
+    bData={tipo:null,sindaco:null,lista:null,prefs:[]};
+    renBallot();
+  } else {
+    view='sez';
+    renSez();
+  }
 }
 function renSez(){
   const d=fd,el=EL[selSez-1];
@@ -938,7 +1057,13 @@ function showBallot(){
   bData={tipo:null,sindaco:null,lista:null,prefs:[]};
   renBallot();
 }
-function backToSez(){view='sez';renSez()}
+function backToSez(){
+  if(userRole==='rapp'){
+    goHome();
+  } else {
+    view='sez';renSez();
+  }
+}
 
 function renBallot(){
   const d=bData;
@@ -970,13 +1095,27 @@ function renBallot(){
 
   $('root').innerHTML=`
     <div class="tb">
+      ${userRole==='rapp'?`
+      <div style="display:flex;align-items:center;gap:8px;flex:1">
+        <button class="btn" onclick="goHome()" style="padding:7px 11px;font-size:12px">←</button>
+        <div style="flex:1">
+          <div class="tb-t">Sezione ${selSez} · Scheda #${schN}</div>
+          <div class="tb-s">${fn(num(fd.votanti))} schede inserite · ${EL[selSez-1]} elettori</div>
+        </div>
+        <button class="btn" onclick="showSezStats()" style="padding:7px 11px;font-size:12px" title="Statistiche">📊</button>
+        <button class="btn" onclick="showRappMenu()" style="padding:7px 11px;font-size:14px" title="Menu">⋯</button>
+      </div>
+      `:`
       <div style="display:flex;align-items:center;gap:10px">
         <button class="btn" onclick="backToSez()">← Indietro</button>
         <div><div class="tb-t">Sezione ${selSez} — Scheda #${schN}</div>
         <div class="tb-s">Inserimento voto</div></div>
       </div>
       ${isDis?'<span class="badge bdis">DISGIUNTO</span>':''}
+      `}
     </div>
+
+    ${userRole==='rapp' && isDis?'<div style="text-align:right;margin-bottom:8px"><span class="badge bdis">DISGIUNTO</span></div>':''}
 
     <p class="sl" data-n="1">Tipo di scheda</p>
     <div class="tg">
@@ -1194,15 +1333,33 @@ async function doSaveBallot(){
   allData[selSez]=fd;cacheSave();
   await fbSaveSez(selSez,fd);
   fbLogEvent({tipo:'scheda',sezione:selSez,numScheda:fd.votanti,tipoScheda:d.tipo,sindaco:d.sindaco,lista:d.lista,nPrefs:d.prefs.length,disgiunto:(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista});
-  view='sez';renSez();
-  setTimeout(()=>{
-    const m=$('sez-msg');
-    if(m){
-      const isD=(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista;
-      m.innerHTML=`<div class="no nok">Scheda #${num(fd.votanti)} salvata sul server${isD?' · voto disgiunto':''}</div>`;
-      setTimeout(()=>{if(m)m.innerHTML=''},2800);
-    }
-  },30);
+
+  // Per rappresentanti: rimani in modalità scrutinio, prepara prossima scheda
+  if(userRole==='rapp'){
+    const isD=(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista;
+    bData={tipo:null,sindaco:null,lista:null,prefs:[]};
+    view='ballot';
+    renBallot();
+    setTimeout(()=>{
+      // Toast di conferma in alto
+      const toast=document.createElement('div');
+      toast.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--gn);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.2);animation:fin .25s';
+      toast.textContent=`✓ Scheda #${num(fd.votanti)} salvata${isD?' · disgiunto':''}`;
+      document.body.appendChild(toast);
+      setTimeout(()=>{toast.style.opacity='0';toast.style.transition='opacity .3s';setTimeout(()=>toast.remove(),300)},1200);
+    },30);
+  } else {
+    // Coordinatore/Admin: torna a vista riepilogo sezione
+    view='sez';renSez();
+    setTimeout(()=>{
+      const m=$('sez-msg');
+      if(m){
+        const isD=(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista;
+        m.innerHTML=`<div class="no nok">Scheda #${num(fd.votanti)} salvata sul server${isD?' · voto disgiunto':''}</div>`;
+        setTimeout(()=>{if(m)m.innerHTML=''},2800);
+      }
+    },30);
+  }
 }
 
 async function undoLast(){
@@ -2202,6 +2359,7 @@ window.showModal=showModal;window.closeModal=closeModal;window.doSaveBallot=doSa
 window.annullaScheda=annullaScheda;
 window.showStoricoSchede=showStoricoSchede;window.confermaAnnulla=confermaAnnulla;
 window.setTicketTab=setTicketTab;window.showPublicDash=showPublicDash;
+window.showRappMenu=showRappMenu;window.showSezStats=showSezStats;
 </script>
 </body>
 </html>
