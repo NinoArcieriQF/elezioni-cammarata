@@ -277,6 +277,7 @@ function onFbReady(){
       else if(view==='dash')updDash();
       else if(view==='public')updPublicDash();
       else if(view==='listdash')renListDash();
+      else if(view==='analytics')renAnalyticsContent();
       else if(view==='sez' && String(selSez) in fresh){
         fd={...defSez(),...fresh[String(selSez)]};
         renSez();
@@ -297,6 +298,7 @@ function onFbReady(){
         else if(view==='dash')renDash();
         else if(view==='public')showPublicDash();
         else if(view==='listdash')renListDash();
+        else if(view==='analytics')renAnalytics();
         else if(view==='sez')renSez();
         else if(view==='ballot')renBallot();
         else if(view==='admin')showAdmin();
@@ -445,6 +447,16 @@ function defSez(){
        coppieOrd: chiave "i>j" (primo indice, secondo indice, ordine conta)
        coppieSet: chiave "min-max" (insieme, ordine non conta) */
     coppieOrd1:{},coppieOrd2:{},coppieSet1:{},coppieSet2:{},
+    /* Analytics avanzata: voti SINGOLI SECCHI per candidato (= unica preferenza sulla scheda)
+       singoli1[j] = quante schede hanno avuto SOLO j come preferenza in lista 1 */
+    singoli1:{},singoli2:{},
+    /* Distribuzione numero preferenze per scheda (per lista votata):
+       n0pref1 = schede di lista 1 con 0 preferenze
+       n1pref1 = schede di lista 1 con 1 preferenza
+       n2pref1 = schede di lista 1 con 2 preferenze
+       (idem per lista 2) */
+    n0pref1:0,n1pref1:0,n2pref1:0,
+    n0pref2:0,n1pref2:0,n2pref2:0,
     vd:0,vd12:0,vd21:0,lastBallots:[],done:false,upd:null};
 }
 function defCands(){
@@ -773,7 +785,9 @@ function wouldViolate(j,prefs,cands){
 
 function totals(d){
   let vt=0,bi=0,nu=0,vc1=0,vc2=0,vl1=0,vl2=0,el=0,vd=0;
+  let n0pref1=0,n1pref1=0,n2pref1=0,n0pref2=0,n1pref2=0,n2pref2=0;
   const p1={},p2={};
+  const singoli1={},singoli2={};
   const coppieOrd1={},coppieOrd2={},coppieSet1={},coppieSet2={};
   for(let i=1;i<=N;i++){
     const s=d[i]||defSez();
@@ -781,11 +795,14 @@ function totals(d){
     vc1+=num(s.vc1);vc2+=num(s.vc2);
     vl1+=num(s.vl1);vl2+=num(s.vl2);
     el+=EL[i-1];vd+=num(s.vd);
+    n0pref1+=num(s.n0pref1);n1pref1+=num(s.n1pref1);n2pref1+=num(s.n2pref1);
+    n0pref2+=num(s.n0pref2);n1pref2+=num(s.n1pref2);n2pref2+=num(s.n2pref2);
     for(let j=0;j<12;j++){
       p1[j]=(p1[j]||0)+num(s.p1&&s.p1[j]);
       p2[j]=(p2[j]||0)+num(s.p2&&s.p2[j]);
+      singoli1[j]=(singoli1[j]||0)+num(s.singoli1&&s.singoli1[j]);
+      singoli2[j]=(singoli2[j]||0)+num(s.singoli2&&s.singoli2[j]);
     }
-    // Aggrega coppie ordinate e non ordinate
     for(const k in (s.coppieOrd1||{})){coppieOrd1[k]=(coppieOrd1[k]||0)+num(s.coppieOrd1[k])}
     for(const k in (s.coppieOrd2||{})){coppieOrd2[k]=(coppieOrd2[k]||0)+num(s.coppieOrd2[k])}
     for(const k in (s.coppieSet1||{})){coppieSet1[k]=(coppieSet1[k]||0)+num(s.coppieSet1[k])}
@@ -794,6 +811,8 @@ function totals(d){
   const tv=vc1+vc2;
   const tvl=vl1+vl2;
   return{vt,bi,nu,vc1,vc2,vl1,vl2,el,tv,tvl,p1,p2,vd,
+    singoli1,singoli2,
+    n0pref1,n1pref1,n2pref1,n0pref2,n1pref2,n2pref2,
     coppieOrd1,coppieOrd2,coppieSet1,coppieSet2,
     aff:el>0?vt/el*100:0,
     pc1:tv>0?vc1/tv*100:0,pc2:tv>0?vc2/tv*100:0,
@@ -914,6 +933,9 @@ function showHome(){
         📋 ${listaNomi[1]}
       </button>
     </div>
+    ${userRole==='admin'?`
+    <button class="btn bw" style="background:#1A1A18;color:#fff;border-color:#000;font-weight:600;margin-bottom:10px;padding:14px" onclick="showAnalytics()">🔍 Analytics avanzata (solo admin)</button>
+    `:''}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:1.25rem">
       <button class="btn" onclick="showAdmin()">⚙️ Candidati</button>
       <button class="btn" onclick="showBackups()">💾 Backup</button>
@@ -1069,12 +1091,15 @@ function renBallot(){
   const d=bData;
   // La lista di riferimento per preferenze = lista votata allo step 3
   const ci=d.lista===1?0:d.lista===2?1:null;
-  const showS=d.tipo==='valida';
-  const showL=showS && d.sindaco!==null;
-  const showP=showL && (d.lista===1||d.lista===2);
-  const isDis=d.tipo==='valida' && (d.sindaco===1||d.sindaco===2) && (d.lista===1||d.lista===2) && d.sindaco!==d.lista;
+  const isBN=d.tipo==='bianca'||d.tipo==='nulla';
+  const isVal=d.tipo==='valida';
+  // Disabilitazione automatica: se bianca/nulla, gli altri step sono "spenti"
+  const dimStyle=isBN?'opacity:.32;pointer-events:none;filter:grayscale(.5)':'';
+  const showP=isVal && (d.lista===1||d.lista===2);
+  const isDis=isVal && (d.sindaco===1||d.sindaco===2) && (d.lista===1||d.lista===2) && d.sindaco!==d.lista;
   const gErr=showP&&ci!==null?genderErr(d.prefs,CANDS[ci]):null;
-  const canConf=d.tipo==='bianca'||d.tipo==='nulla'||(showS && d.sindaco!==null && d.lista!==null && !gErr);
+  // Conferma abilitata: bianca/nulla SEMPRE; valida sempre (anche tutto null)
+  const canConf=isBN || (isVal && !gErr);
   const schN=num(fd.votanti)+1;
 
   let prefHTML='';
@@ -1124,61 +1149,60 @@ function renBallot(){
       <button class="tb2${d.tipo==='nulla'?' sn2':''}" onclick="selTipo('nulla')"><div class="ti">✕</div><div class="tl">Nulla</div></button>
     </div>
 
-    ${showS?`
-    <div class="sdiv"></div>
-    <p class="sl" data-n="2">Voto al candidato sindaco</p>
-    <div class="cpg">
-      <button class="cpb cc1${d.sindaco===1?' sel':''}" onclick="selSindaco(1)">
-        <div class="cpl">${listaNomi[0]}</div><div class="cpn">${C1.nome}</div>
+    <div style="${dimStyle}">
+      <div class="sdiv"></div>
+      <p class="sl" data-n="2">Voto al candidato sindaco</p>
+      <div class="cpg">
+        <button class="cpb cc1${d.sindaco===1?' sel':''}" onclick="selSindaco(1)">
+          <div class="cpl">${listaNomi[0]}</div><div class="cpn">${C1.nome}</div>
+        </button>
+        <button class="cpb cc2${d.sindaco===2?' sel':''}" onclick="selSindaco(2)">
+          <div class="cpl">${listaNomi[1]}</div><div class="cpn">${C2.nome}</div>
+        </button>
+      </div>
+      <button class="btn${d.sindaco==='nessuno'?' bp':''}" style="width:100%;padding:9px;font-size:12px;margin-bottom:1rem" onclick="selSindaco('nessuno')">
+        Nessun voto al sindaco
       </button>
-      <button class="cpb cc2${d.sindaco===2?' sel':''}" onclick="selSindaco(2)">
-        <div class="cpl">${listaNomi[1]}</div><div class="cpn">${C2.nome}</div>
+
+      <div class="sdiv"></div>
+      <p class="sl" data-n="3">Voto alla lista (simbolo barrato)
+        <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">— le preferenze saranno di questa lista</span>
+      </p>
+      <div class="cpg">
+        <button class="cpb cc1${d.lista===1?' sel':''}" onclick="selLista(1)">
+          <div class="cpl">Voto lista</div><div class="cpn">${listaNomi[0]}</div>
+        </button>
+        <button class="cpb cc2${d.lista===2?' sel':''}" onclick="selLista(2)">
+          <div class="cpl">Voto lista</div><div class="cpn">${listaNomi[1]}</div>
+        </button>
+      </div>
+      <button class="btn${d.lista==='nessuna'?' bp':''}" style="width:100%;padding:9px;font-size:12px;margin-bottom:1rem" onclick="selLista('nessuna')">
+        Nessun simbolo lista barrato
       </button>
+      ${isDis?'<div class="no nwa" style="margin-top:-6px;margin-bottom:10px">Voto disgiunto: sindaco e lista di schieramenti diversi</div>':''}
+
+      ${showP?`
+      <div class="sdiv"></div>
+      <p class="sl" data-n="4">Preferenze consiglieri · ${listaNomi[ci]}
+        <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">opzionali · ${d.prefs.length}/${MPREF}</span>
+      </p>
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        ${gB('M')} uomo &nbsp; ${gB('F')} donna &nbsp;·&nbsp;
+        massimo 2 preferenze · se 2 → obbligatorio 1 uomo + 1 donna
+      </div>
+      <div class="pg">${prefHTML}</div>
+      ${gErr?`<div class="no ner">${gErr}</div>`:''}
+      ${d.prefs.length>=2&&!gErr?`<div class="no nok">Genere valido ✓</div>`:''}
+      `:isVal && d.lista==='nessuna'?`
+      <div class="sdiv"></div>
+      <div class="no nwa">Senza voto alla lista non è possibile registrare preferenze (sarebbero nulle).</div>
+      `:''}
     </div>
-    <button class="btn${d.sindaco==='nessuno'?' bp':''}" style="width:100%;padding:9px;font-size:12px;margin-bottom:1rem" onclick="selSindaco('nessuno')">
-      Nessun voto al sindaco
-    </button>`:''}
 
-    ${showL?`
-    <div class="sdiv"></div>
-    <p class="sl" data-n="3">Voto alla lista (simbolo barrato)
-      <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">— le preferenze saranno di questa lista</span>
-    </p>
-    <div class="cpg">
-      <button class="cpb cc1${d.lista===1?' sel':''}" onclick="selLista(1)">
-        <div class="cpl">Voto lista</div><div class="cpn">${listaNomi[0]}</div>
-      </button>
-      <button class="cpb cc2${d.lista===2?' sel':''}" onclick="selLista(2)">
-        <div class="cpl">Voto lista</div><div class="cpn">${listaNomi[1]}</div>
-      </button>
-    </div>
-    <button class="btn${d.lista==='nessuna'?' bp':''}" style="width:100%;padding:9px;font-size:12px;margin-bottom:1rem" onclick="selLista('nessuna')">
-      Nessun simbolo lista barrato
-    </button>
-    ${isDis?'<div class="no nwa" style="margin-top:-6px;margin-bottom:10px">Voto disgiunto: sindaco e lista di schieramenti diversi</div>':''}`:''}
-
-    ${showP?`
-    <div class="sdiv"></div>
-    <p class="sl" data-n="4">Preferenze consiglieri · ${listaNomi[ci]}
-      <span style="text-transform:none;letter-spacing:0;font-size:11px;color:var(--tx3);font-weight:400">opzionali · ${d.prefs.length}/${MPREF}</span>
-    </p>
-    <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;display:flex;align-items:center;gap:6px">
-      ${gB('M')} uomo &nbsp; ${gB('F')} donna &nbsp;·&nbsp;
-      massimo 2 preferenze · se 2 → obbligatorio 1 uomo + 1 donna
-    </div>
-    <div class="pg">${prefHTML}</div>
-    ${gErr?`<div class="no ner">${gErr}</div>`:''}
-    ${d.prefs.length>=2&&!gErr?`<div class="no nok">Genere valido ✓</div>`:''}`:''}
-
-    ${showL && d.lista==='nessuna'?`
-    <div class="sdiv"></div>
-    <div class="no nwa">Senza voto alla lista non è possibile registrare preferenze consiglieri (sarebbero nulle). Conferma pure se la scheda non riporta simbolo lista barrato.</div>
-    `:''}
-
-    <div style="margin-top:${showP?'4px':'1rem'}">
+    <div style="margin-top:1rem">
       ${canConf
         ?`<button class="btn bp bw blg" onclick="confirmBallot()">Conferma scheda #${schN}</button>`
-        :`<button class="btn bw blg" disabled>Completa gli step richiesti</button>`}
+        :`<button class="btn bw blg" disabled>Seleziona tipo scheda per confermare</button>`}
     </div>
   `;
 }
@@ -1209,16 +1233,34 @@ async function confirmBallot(){
 
   let riepilogoHTML='';
   if(d.tipo==='bianca'){
-    riepilogoHTML=`<div style="text-align:center;padding:1rem 0">
-      <div style="font-size:40px;margin-bottom:8px">○</div>
-      <p style="font-size:16px;font-weight:600">Scheda Bianca</p>
-    </div>`;
-  }else if(d.tipo==='nulla'){
-    riepilogoHTML=`<div style="text-align:center;padding:1rem 0">
-      <div style="font-size:40px;margin-bottom:8px;color:#C44">✕</div>
-      <p style="font-size:16px;font-weight:600">Scheda Nulla</p>
-    </div>`;
-  }else{
+    showModal(`
+      <div style="padding:1.5rem;text-align:center">
+        <div style="font-size:48px;margin-bottom:8px">○</div>
+        <p style="font-size:18px;font-weight:700;margin-bottom:6px">Conferma scheda #${schN}</p>
+        <p style="font-size:14px;color:var(--tx2);margin-bottom:18px">Tipo: <strong>BIANCA</strong></p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn bd2" style="padding:14px;font-size:14px" onclick="closeModal()">← Annulla</button>
+          <button class="btn bg" style="padding:14px;font-size:14px;font-weight:600" onclick="doSaveBallot()">✓ Conferma</button>
+        </div>
+      </div>
+    `);
+    return;
+  }
+  if(d.tipo==='nulla'){
+    showModal(`
+      <div style="padding:1.5rem;text-align:center">
+        <div style="font-size:48px;margin-bottom:8px;color:#C44">✕</div>
+        <p style="font-size:18px;font-weight:700;margin-bottom:6px">Conferma scheda #${schN}</p>
+        <p style="font-size:14px;color:var(--tx2);margin-bottom:18px">Tipo: <strong>NULLA</strong></p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn bd2" style="padding:14px;font-size:14px" onclick="closeModal()">← Annulla</button>
+          <button class="btn bg" style="padding:14px;font-size:14px;font-weight:600" onclick="doSaveBallot()">✓ Conferma</button>
+        </div>
+      </div>
+    `);
+    return;
+  }
+  // Per scheda valida: popup completo con riepilogo
     // Box sindaco
     let sindBox='';
     if(d.sindaco===1||d.sindaco===2){
@@ -1266,7 +1308,6 @@ async function confirmBallot(){
     }
     riepilogoHTML=sindBox+listaBox
       +(isDisgiunto?`<div class="no nwa" style="margin-bottom:8px;font-size:12px">⚠ Voto disgiunto: sindaco e lista di schieramenti diversi</div>`:'');
-  }
 
   showModal(`
     <div style="padding:1.5rem 1.5rem 1rem">
@@ -1306,11 +1347,25 @@ async function doSaveBallot(){
       const pk=d.lista===1?'p1':'p2';
       if(!fd[pk])fd[pk]={};
       d.prefs.forEach(j=>{fd[pk][j]=(fd[pk][j]||0)+1});
-      // Accoppiate: solo se esattamente 2 preferenze
-      if(d.prefs.length===2){
+      // Distribuzione preferenze (0/1/2 per lista)
+      const distKey=d.lista===1?'n':'n';
+      if(d.prefs.length===0){
+        if(d.lista===1)fd.n0pref1=(fd.n0pref1||0)+1;
+        else fd.n0pref2=(fd.n0pref2||0)+1;
+      }else if(d.prefs.length===1){
+        if(d.lista===1)fd.n1pref1=(fd.n1pref1||0)+1;
+        else fd.n1pref2=(fd.n1pref2||0)+1;
+        // Voto SECCO singolo: una sola preferenza
+        const singKey=d.lista===1?'singoli1':'singoli2';
+        if(!fd[singKey])fd[singKey]={};
+        fd[singKey][d.prefs[0]]=(fd[singKey][d.prefs[0]]||0)+1;
+      }else if(d.prefs.length===2){
+        if(d.lista===1)fd.n2pref1=(fd.n2pref1||0)+1;
+        else fd.n2pref2=(fd.n2pref2||0)+1;
+        // Accoppiate
         const [a,b]=d.prefs;
-        const keyOrd=a+'>'+b;        // ordinata (a è 1° pref, b è 2°)
-        const keySet=Math.min(a,b)+'-'+Math.max(a,b);  // non ordinata
+        const keyOrd=a+'>'+b;
+        const keySet=Math.min(a,b)+'-'+Math.max(a,b);
         const kOrd=d.lista===1?'coppieOrd1':'coppieOrd2';
         const kSet=d.lista===1?'coppieSet1':'coppieSet2';
         if(!fd[kOrd])fd[kOrd]={};
@@ -1382,8 +1437,18 @@ async function undoLast(){
     if(d.lista===1||d.lista===2){
       const pk=d.lista===1?'p1':'p2';
       if(fd[pk])d.prefs.forEach(j=>{if(fd[pk][j]!==undefined)fd[pk][j]=Math.max(0,fd[pk][j]-1)});
-      // Sottrai coppie
-      if(d.prefs.length===2){
+      // Sottrai distribuzione preferenze e singoli/coppie
+      if(d.prefs.length===0){
+        if(d.lista===1)fd.n0pref1=Math.max(0,(fd.n0pref1||0)-1);
+        else fd.n0pref2=Math.max(0,(fd.n0pref2||0)-1);
+      }else if(d.prefs.length===1){
+        if(d.lista===1)fd.n1pref1=Math.max(0,(fd.n1pref1||0)-1);
+        else fd.n1pref2=Math.max(0,(fd.n1pref2||0)-1);
+        const singKey=d.lista===1?'singoli1':'singoli2';
+        if(fd[singKey]&&fd[singKey][d.prefs[0]]!==undefined)fd[singKey][d.prefs[0]]=Math.max(0,fd[singKey][d.prefs[0]]-1);
+      }else if(d.prefs.length===2){
+        if(d.lista===1)fd.n2pref1=Math.max(0,(fd.n2pref1||0)-1);
+        else fd.n2pref2=Math.max(0,(fd.n2pref2||0)-1);
         const [a,b]=d.prefs;
         const keyOrd=a+'>'+b;
         const keySet=Math.min(a,b)+'-'+Math.max(a,b);
@@ -1425,8 +1490,18 @@ async function annullaScheda(idx){
     if(d.lista===1||d.lista===2){
       const pk=d.lista===1?'p1':'p2';
       if(fd[pk])d.prefs.forEach(j=>{if(fd[pk][j]!==undefined)fd[pk][j]=Math.max(0,fd[pk][j]-1)});
-      // Sottrai coppie
-      if(d.prefs.length===2){
+      // Sottrai distribuzione preferenze e singoli/coppie
+      if(d.prefs.length===0){
+        if(d.lista===1)fd.n0pref1=Math.max(0,(fd.n0pref1||0)-1);
+        else fd.n0pref2=Math.max(0,(fd.n0pref2||0)-1);
+      }else if(d.prefs.length===1){
+        if(d.lista===1)fd.n1pref1=Math.max(0,(fd.n1pref1||0)-1);
+        else fd.n1pref2=Math.max(0,(fd.n1pref2||0)-1);
+        const singKey=d.lista===1?'singoli1':'singoli2';
+        if(fd[singKey]&&fd[singKey][d.prefs[0]]!==undefined)fd[singKey][d.prefs[0]]=Math.max(0,fd[singKey][d.prefs[0]]-1);
+      }else if(d.prefs.length===2){
+        if(d.lista===1)fd.n2pref1=Math.max(0,(fd.n2pref1||0)-1);
+        else fd.n2pref2=Math.max(0,(fd.n2pref2||0)-1);
         const [a,b]=d.prefs;
         const keyOrd=a+'>'+b;
         const keySet=Math.min(a,b)+'-'+Math.max(a,b);
@@ -2240,6 +2315,449 @@ function setTicketTab(tab,idx){
   }
 }
 
+/* ══ ANALYTICS AVANZATA — solo admin ════════════════════════
+   Mostra:
+   - Distribuzione 0/1/2 preferenze per lista
+   - Voti SECCHI singoli per candidato (= unica preferenza sulla scheda)
+   - Voti TOTALI per candidato (qualsiasi posizione)
+   - Tutte le accoppiate ordinate (con tabella sezione per sezione + heatmap)
+   - Tutte le accoppiate non ordinate (con tabella sezione per sezione + heatmap)
+   - Export CSV completo per analisi post-voto
+═══════════════════════════════════════════════════════════ */
+let analyticsTab='dist'; // dist | secchi | ord | set
+let analyticsListaIdx=0;
+
+function showAnalytics(){
+  if(userRole!=='admin'){alert('Pagina riservata all\'admin.');return}
+  view='analytics';killCharts();
+  renAnalytics();
+}
+
+function renAnalytics(){
+  const t=totals(allData);
+  const idx=analyticsListaIdx;
+  const tab=analyticsTab;
+  const cands=CANDS[idx]||[];
+  const colMid=idx===0?'var(--c1m)':'var(--c2m)';
+  const col=idx===0?'var(--c1)':'var(--c2)';
+  const colHex=idx===0?'#1B5299':'#B84020';
+  const colBg=idx===0?'var(--c1l)':'var(--c2l)';
+
+  $('root').className='wide';
+  $('root').innerHTML=`
+    <div class="tb">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn" onclick="goHome()">← Torna</button>
+        <div><div class="tb-t">🔍 Analytics avanzata</div>
+        <div class="tb-s">Solo admin · ${COMUNE} · <span id="live-clk"></span></div></div>
+      </div>
+    </div>
+
+    <!-- Selettore lista -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <button class="btn ${idx===0?'':''}" style="${idx===0?'background:var(--c1l);color:var(--c1t);border-color:var(--c1)':'background:var(--sf);color:var(--tx2)'};font-weight:600;padding:12px" onclick="setAnalyticsLista(0)">
+        ${listaNomi[0]}
+      </button>
+      <button class="btn ${idx===1?'':''}" style="${idx===1?'background:var(--c2l);color:var(--c2t);border-color:var(--c2)':'background:var(--sf);color:var(--tx2)'};font-weight:600;padding:12px" onclick="setAnalyticsLista(1)">
+        ${listaNomi[1]}
+      </button>
+    </div>
+
+    <!-- Tab analytics -->
+    <div style="display:flex;border:1px solid var(--bd);border-radius:var(--rs);overflow:hidden;margin-bottom:14px;flex-wrap:wrap">
+      <button onclick="setAnalyticsTab('dist')" style="flex:1;min-width:120px;padding:10px;border:none;background:${tab==='dist'?col:'var(--sf)'};color:${tab==='dist'?'#fff':'var(--tx2)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📊 Distribuzione</button>
+      <button onclick="setAnalyticsTab('secchi')" style="flex:1;min-width:120px;padding:10px;border:none;background:${tab==='secchi'?col:'var(--sf)'};color:${tab==='secchi'?'#fff':'var(--tx2)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🎯 Voti secchi</button>
+      <button onclick="setAnalyticsTab('ord')" style="flex:1;min-width:120px;padding:10px;border:none;background:${tab==='ord'?col:'var(--sf)'};color:${tab==='ord'?'#fff':'var(--tx2)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🔗 Accoppiate ordinate</button>
+      <button onclick="setAnalyticsTab('set')" style="flex:1;min-width:120px;padding:10px;border:none;background:${tab==='set'?col:'var(--sf)'};color:${tab==='set'?'#fff':'var(--tx2)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🔁 Accoppiate (insieme)</button>
+    </div>
+
+    <div id="analytics-content"></div>
+
+    <div class="io" style="margin-top:14px">
+      <button class="btn bg" onclick="exportAnalyticsCSV()">📥 Export CSV completo</button>
+      <button class="btn" onclick="goHome()">← Home admin</button>
+    </div>
+  `;
+  startClock();
+  renAnalyticsContent();
+}
+
+function setAnalyticsTab(tab){
+  analyticsTab=tab;
+  if(view==='analytics')renAnalytics();
+}
+function setAnalyticsLista(idx){
+  analyticsListaIdx=idx;
+  if(view==='analytics')renAnalytics();
+}
+
+function renAnalyticsContent(){
+  const t=totals(allData);
+  const idx=analyticsListaIdx;
+  const tab=analyticsTab;
+  const cands=CANDS[idx]||[];
+  const colMid=idx===0?'var(--c1m)':'var(--c2m)';
+  const col=idx===0?'var(--c1)':'var(--c2)';
+  const colHex=idx===0?'#1B5299':'#B84020';
+  const colBg=idx===0?'var(--c1l)':'var(--c2l)';
+  const pk=idx===0?'p1':'p2';
+  const target=$('analytics-content');
+  if(!target)return;
+
+  // Calcoli base
+  const n0=idx===0?t.n0pref1:t.n0pref2;
+  const n1=idx===0?t.n1pref1:t.n1pref2;
+  const n2=idx===0?t.n2pref1:t.n2pref2;
+  const totSch=n0+n1+n2;
+  const singoli=idx===0?t.singoli1:t.singoli2;
+  const totVoti=idx===0?t.p1:t.p2;
+
+  // ─── TAB DISTRIBUZIONE ───
+  if(tab==='dist'){
+    const vlTot=idx===0?t.vl1:t.vl2;
+    const pct0=totSch>0?(n0/totSch*100).toFixed(1):'—';
+    const pct1=totSch>0?(n1/totSch*100).toFixed(1):'—';
+    const pct2=totSch>0?(n2/totSch*100).toFixed(1):'—';
+    target.innerHTML=`
+      <div class="card">
+        <span class="ct" style="color:${colMid}">distribuzione preferenze sulle schede di lista — ${listaNomi[idx]}</span>
+        <p style="font-size:12px;color:var(--tx3);margin-bottom:14px">${fn(totSch)} schede di lista totali · ${fn(vlTot)} voti lista (può differire se sindaco != lista)</p>
+        <div class="kg" style="grid-template-columns:1fr 1fr 1fr">
+          <div class="kpi" style="background:${colBg};border-color:${idx===0?'#A8CAEA':'#EAB8A8'}">
+            <div class="kl">0 preferenze</div>
+            <div class="kv" style="color:${col}">${fn(n0)}</div>
+            <div class="ks">${pct0}% schede</div>
+          </div>
+          <div class="kpi" style="background:${colBg};border-color:${idx===0?'#A8CAEA':'#EAB8A8'}">
+            <div class="kl">1 preferenza (secca)</div>
+            <div class="kv" style="color:${col}">${fn(n1)}</div>
+            <div class="ks">${pct1}% schede</div>
+          </div>
+          <div class="kpi" style="background:${colBg};border-color:${idx===0?'#A8CAEA':'#EAB8A8'}">
+            <div class="kl">2 preferenze (accoppiate)</div>
+            <div class="kv" style="color:${col}">${fn(n2)}</div>
+            <div class="ks">${pct2}% schede</div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--tx3);margin-top:12px;line-height:1.5">
+          Le preferenze totali sono <strong>${fn(n1+n2*2)}</strong> (dato dalla somma di voti secchi + 2× accoppiate).
+          Voti lista che non hanno espresso preferenza: <strong>${fn(n0)}</strong>.
+        </p>
+      </div>
+
+      <div class="card">
+        <span class="ct" style="color:${colMid}">distribuzione preferenze per sezione</span>
+        <table class="tbl">
+          <thead><tr><th>Sezione</th><th>Voti lista</th><th>0 pref</th><th>1 pref (secca)</th><th>2 pref (accoppiata)</th></tr></thead>
+          <tbody>
+            ${Array.from({length:N},(_,i)=>{
+              const s=allData[i+1]||defSez();
+              const vl=idx===0?num(s.vl1):num(s.vl2);
+              const _n0=idx===0?num(s.n0pref1):num(s.n0pref2);
+              const _n1=idx===0?num(s.n1pref1):num(s.n1pref2);
+              const _n2=idx===0?num(s.n2pref1):num(s.n2pref2);
+              return `<tr>
+                <td style="font-weight:600">${i+1}</td>
+                <td style="color:${col};font-weight:600;font-family:'DM Mono',monospace">${fn(vl)}</td>
+                <td>${fn(_n0)}</td>
+                <td>${fn(_n1)}</td>
+                <td>${fn(_n2)}</td>
+              </tr>`;
+            }).join('')}
+            <tr style="background:${colBg};font-weight:600">
+              <td>TOT</td>
+              <td style="color:${col};font-family:'DM Mono',monospace">${fn(vlTot)}</td>
+              <td style="color:${colMid};font-family:'DM Mono',monospace">${fn(n0)}</td>
+              <td style="color:${colMid};font-family:'DM Mono',monospace">${fn(n1)}</td>
+              <td style="color:${colMid};font-family:'DM Mono',monospace">${fn(n2)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+    return;
+  }
+
+  // ─── TAB VOTI SECCHI ───
+  if(tab==='secchi'){
+    // Per ogni candidato: voti totali, voti secchi, voti in accoppiata
+    const dati=cands.map((c,j)=>{
+      const totaleCand=num(totVoti[j]);
+      const seccoCand=num(singoli[j]);
+      const inAccoppiata=totaleCand-seccoCand;
+      return {j,nome:c.nome||'C'+(j+1),genere:c.genere||'M',
+        totale:totaleCand,secco:seccoCand,accoppiata:inAccoppiata};
+    }).sort((a,b)=>b.totale-a.totale);
+
+    const maxTot=Math.max(1,...dati.map(d=>d.totale));
+    const heatBg=v=>{
+      if(v<=0)return 'transparent';
+      const a=(0.08+Math.min(1,v/maxTot)*0.45).toFixed(2);
+      return idx===0?`rgba(27,82,153,${a})`:`rgba(184,64,32,${a})`;
+    };
+
+    target.innerHTML=`
+      <div class="card">
+        <span class="ct" style="color:${colMid}">voti totali, secchi e in accoppiata · ${listaNomi[idx]}</span>
+        <p style="font-size:12px;color:var(--tx3);margin-bottom:12px">
+          <strong>Voto SECCO</strong> = candidato votato come UNICA preferenza sulla scheda<br>
+          <strong>Voto in accoppiata</strong> = candidato votato insieme a un altro
+        </p>
+        <table class="tbl">
+          <thead><tr>
+            <th>Pos</th><th>Candidato</th><th>Gen</th>
+            <th style="color:${colMid}">Totale voti</th>
+            <th style="color:${colMid}">🎯 Secchi</th>
+            <th style="color:${colMid}">🔗 In accoppiata</th>
+            <th>% secchi</th>
+          </tr></thead>
+          <tbody>
+            ${dati.map((d,pos)=>{
+              const pctSecco=d.totale>0?(d.secco/d.totale*100).toFixed(1)+'%':'—';
+              return `<tr>
+                <td style="font-weight:600;color:var(--tx3);font-family:'DM Mono',monospace">${pos+1}</td>
+                <td style="font-weight:500">${d.nome}</td>
+                <td>${gB(d.genere)}</td>
+                <td style="background:${heatBg(d.totale)};font-weight:700;color:${col};font-family:'DM Mono',monospace">${fn(d.totale)}</td>
+                <td style="background:${heatBg(d.secco)};font-family:'DM Mono',monospace">${fn(d.secco)}</td>
+                <td style="background:${heatBg(d.accoppiata)};font-family:'DM Mono',monospace">${fn(d.accoppiata)}</td>
+                <td style="color:var(--tx3);font-family:'DM Mono',monospace;font-size:11px">${pctSecco}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <span class="ct" style="color:${colMid}">voti SECCHI per sezione (heatmap)</span>
+        <div style="overflow-x:auto">
+          <table class="tbl" style="min-width:700px">
+            <thead><tr><th>Candidato</th><th>Tot</th>${Array.from({length:N},(_,i)=>'<th>Sez.'+(i+1)+'</th>').join('')}</tr></thead>
+            <tbody>
+              ${dati.map(c=>{
+                const sez=Array.from({length:N},(_,i)=>{
+                  const s=allData[i+1]||defSez();
+                  return num((idx===0?s.singoli1:s.singoli2)&&(idx===0?s.singoli1:s.singoli2)[c.j]);
+                });
+                const maxSez=Math.max(1,...sez);
+                const heatSez=v=>{
+                  if(v<=0)return 'transparent';
+                  const a=(0.08+Math.min(1,v/maxSez)*0.45).toFixed(2);
+                  return idx===0?`rgba(27,82,153,${a})`:`rgba(184,64,32,${a})`;
+                };
+                return `<tr>
+                  <td style="font-size:12px">${c.nome}</td>
+                  <td style="font-weight:600;color:${col};font-family:'DM Mono',monospace">${fn(c.secco)}</td>
+                  ${sez.map(v=>`<td style="background:${heatSez(v)};font-family:'DM Mono',monospace;text-align:center">${v>0?fn(v):'—'}</td>`).join('')}
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // ─── TAB ACCOPPIATE ORDINATE ───
+  if(tab==='ord'){
+    const coppieData=idx===0?t.coppieOrd1:t.coppieOrd2;
+    const lista=Object.entries(coppieData||{})
+      .map(([k,v])=>{
+        const [a,b]=k.split('>').map(n=>parseInt(n));
+        return {a,b,key:k,voti:num(v),candA:cands[a],candB:cands[b]};
+      })
+      .filter(x=>x.candA&&x.candB&&x.voti>0)
+      .sort((a,b)=>b.voti-a.voti);
+
+    const maxV=Math.max(1,...lista.map(x=>x.voti));
+    const heatBg=v=>{
+      if(v<=0)return 'transparent';
+      const a=(0.08+Math.min(1,v/maxV)*0.45).toFixed(2);
+      return idx===0?`rgba(27,82,153,${a})`:`rgba(184,64,32,${a})`;
+    };
+
+    if(lista.length===0){
+      target.innerHTML=`<div class="card"><p style="font-size:13px;color:var(--tx3);text-align:center;padding:1rem">Nessuna accoppiata ordinata registrata.<br>Le accoppiate vengono create da schede con esattamente 2 preferenze.</p></div>`;
+      return;
+    }
+
+    target.innerHTML=`
+      <div class="card">
+        <span class="ct" style="color:${colMid}">tutte le accoppiate ordinate · ${listaNomi[idx]}</span>
+        <p style="font-size:12px;color:var(--tx3);margin-bottom:12px">
+          La <strong>1ª preferenza</strong> appare a sinistra, la <strong>2ª preferenza</strong> a destra.<br>
+          ${fn(lista.length)} accoppiate distinte registrate · totale voti: ${fn(lista.reduce((s,x)=>s+x.voti,0))}
+        </p>
+        <div style="overflow-x:auto">
+          <table class="tbl" style="min-width:800px">
+            <thead><tr>
+              <th>Pos</th><th>1ª preferenza</th><th>2ª preferenza</th><th>Totale</th>
+              ${Array.from({length:N},(_,i)=>'<th>Sez.'+(i+1)+'</th>').join('')}
+            </tr></thead>
+            <tbody>
+              ${lista.map((x,pos)=>{
+                const sez=Array.from({length:N},(_,i)=>{
+                  const s=allData[i+1]||defSez();
+                  const co=idx===0?s.coppieOrd1:s.coppieOrd2;
+                  return num(co&&co[x.key]);
+                });
+                const maxSez=Math.max(1,...sez);
+                const heatSez=v=>{
+                  if(v<=0)return 'transparent';
+                  const a=(0.08+Math.min(1,v/maxSez)*0.45).toFixed(2);
+                  return idx===0?`rgba(27,82,153,${a})`:`rgba(184,64,32,${a})`;
+                };
+                return `<tr>
+                  <td style="font-weight:600;color:var(--tx3);font-family:'DM Mono',monospace">${pos+1}</td>
+                  <td style="font-size:12px;display:flex;align-items:center;gap:5px">${gB(x.candA.genere)}${x.candA.nome}</td>
+                  <td style="font-size:12px;display:flex;align-items:center;gap:5px">${gB(x.candB.genere)}${x.candB.nome}</td>
+                  <td style="background:${heatBg(x.voti)};font-weight:700;color:${col};font-family:'DM Mono',monospace">${fn(x.voti)}</td>
+                  ${sez.map(v=>`<td style="background:${heatSez(v)};font-family:'DM Mono',monospace;text-align:center;font-size:11px">${v>0?fn(v):'—'}</td>`).join('')}
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // ─── TAB ACCOPPIATE NON ORDINATE ───
+  if(tab==='set'){
+    const coppieData=idx===0?t.coppieSet1:t.coppieSet2;
+    const lista=Object.entries(coppieData||{})
+      .map(([k,v])=>{
+        const [a,b]=k.split('-').map(n=>parseInt(n));
+        return {a,b,key:k,voti:num(v),candA:cands[a],candB:cands[b]};
+      })
+      .filter(x=>x.candA&&x.candB&&x.voti>0)
+      .sort((a,b)=>b.voti-a.voti);
+
+    const maxV=Math.max(1,...lista.map(x=>x.voti));
+    const heatBg=v=>{
+      if(v<=0)return 'transparent';
+      const a=(0.08+Math.min(1,v/maxV)*0.45).toFixed(2);
+      return idx===0?`rgba(27,82,153,${a})`:`rgba(184,64,32,${a})`;
+    };
+
+    if(lista.length===0){
+      target.innerHTML=`<div class="card"><p style="font-size:13px;color:var(--tx3);text-align:center;padding:1rem">Nessuna accoppiata registrata.<br>Le accoppiate vengono create da schede con esattamente 2 preferenze.</p></div>`;
+      return;
+    }
+
+    target.innerHTML=`
+      <div class="card">
+        <span class="ct" style="color:${colMid}">tutte le accoppiate non ordinate · ${listaNomi[idx]}</span>
+        <p style="font-size:12px;color:var(--tx3);margin-bottom:12px">
+          La coppia è considerata indipendentemente dall'ordine: <em>A+B = B+A</em>.<br>
+          ${fn(lista.length)} coppie distinte registrate · totale voti: ${fn(lista.reduce((s,x)=>s+x.voti,0))}
+        </p>
+        <div style="overflow-x:auto">
+          <table class="tbl" style="min-width:800px">
+            <thead><tr>
+              <th>Pos</th><th>Candidato A</th><th>Candidato B</th><th>Totale</th>
+              ${Array.from({length:N},(_,i)=>'<th>Sez.'+(i+1)+'</th>').join('')}
+            </tr></thead>
+            <tbody>
+              ${lista.map((x,pos)=>{
+                const sez=Array.from({length:N},(_,i)=>{
+                  const s=allData[i+1]||defSez();
+                  const co=idx===0?s.coppieSet1:s.coppieSet2;
+                  return num(co&&co[x.key]);
+                });
+                const maxSez=Math.max(1,...sez);
+                const heatSez=v=>{
+                  if(v<=0)return 'transparent';
+                  const a=(0.08+Math.min(1,v/maxSez)*0.45).toFixed(2);
+                  return idx===0?`rgba(27,82,153,${a})`:`rgba(184,64,32,${a})`;
+                };
+                return `<tr>
+                  <td style="font-weight:600;color:var(--tx3);font-family:'DM Mono',monospace">${pos+1}</td>
+                  <td style="font-size:12px;display:flex;align-items:center;gap:5px">${gB(x.candA.genere)}${x.candA.nome}</td>
+                  <td style="font-size:12px;display:flex;align-items:center;gap:5px">${gB(x.candB.genere)}${x.candB.nome}</td>
+                  <td style="background:${heatBg(x.voti)};font-weight:700;color:${col};font-family:'DM Mono',monospace">${fn(x.voti)}</td>
+                  ${sez.map(v=>`<td style="background:${heatSez(v)};font-family:'DM Mono',monospace;text-align:center;font-size:11px">${v>0?fn(v):'—'}</td>`).join('')}
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    return;
+  }
+}
+
+// Export CSV completo per analisi post-voto
+function exportAnalyticsCSV(){
+  if(userRole!=='admin'){alert('Solo admin');return}
+  const t=totals(allData);
+  const q=v=>`"${String(v).replace(/"/g,'""')}"`;
+  const rows=[];
+  rows.push(['ANALYTICS COMPLETA — '+COMUNE,'Data: '+DATA_EL,'Generato: '+new Date().toLocaleString('it-IT')].join(','));
+
+  for(let li=0;li<2;li++){
+    const cands=CANDS[li]||[];
+    const pk=li===0?'p1':'p2';
+    const sk=li===0?'singoli1':'singoli2';
+    const ok=li===0?'coppieOrd1':'coppieOrd2';
+    const setk=li===0?'coppieSet1':'coppieSet2';
+    const vl=li===0?t.vl1:t.vl2;
+    const n0=li===0?t.n0pref1:t.n0pref2;
+    const n1=li===0?t.n1pref1:t.n1pref2;
+    const n2=li===0?t.n2pref1:t.n2pref2;
+
+    rows.push('');
+    rows.push(['===== LISTA: '+listaNomi[li]+' ====='].join(','));
+    rows.push('');
+    rows.push(['DISTRIBUZIONE PREFERENZE'].join(','));
+    rows.push(['Voti lista totali',vl].join(','));
+    rows.push(['Schede 0 preferenze',n0].join(','));
+    rows.push(['Schede 1 preferenza (secca)',n1].join(','));
+    rows.push(['Schede 2 preferenze (accoppiata)',n2].join(','));
+    rows.push('');
+    rows.push(['VOTI PER CANDIDATO'].join(','));
+    rows.push(['Candidato','Genere','Voti totali','Voti secchi','Voti in accoppiata',...Array.from({length:N},(_,i)=>'Sez.'+(i+1)+' tot'),...Array.from({length:N},(_,i)=>'Sez.'+(i+1)+' secchi')].join(','));
+    for(let j=0;j<12;j++){
+      const c=cands[j]||{nome:'Cand'+(j+1),genere:'M'};
+      const tot=num(t[pk][j]);
+      const sec=num((li===0?t.singoli1:t.singoli2)[j]);
+      const sezTot=Array.from({length:N},(_,i)=>{const s=allData[i+1]||defSez();return num(s[pk]&&s[pk][j])});
+      const sezSec=Array.from({length:N},(_,i)=>{const s=allData[i+1]||defSez();return num(s[sk]&&s[sk][j])});
+      rows.push([q(c.nome),c.genere,tot,sec,tot-sec,...sezTot,...sezSec].join(','));
+    }
+    rows.push('');
+    rows.push(['ACCOPPIATE ORDINATE (1ª pref + 2ª pref)'].join(','));
+    rows.push(['1ª pref','2ª pref','Voti totali',...Array.from({length:N},(_,i)=>'Sez.'+(i+1))].join(','));
+    const ord=Object.entries(t[ok]||{}).map(([k,v])=>{const[a,b]=k.split('>').map(n=>parseInt(n));return{a,b,key:k,v:num(v)}}).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+    ord.forEach(x=>{
+      const cA=cands[x.a],cB=cands[x.b];
+      if(!cA||!cB)return;
+      const sez=Array.from({length:N},(_,i)=>{const s=allData[i+1]||defSez();return num(s[ok]&&s[ok][x.key])});
+      rows.push([q(cA.nome),q(cB.nome),x.v,...sez].join(','));
+    });
+    rows.push('');
+    rows.push(['ACCOPPIATE NON ORDINATE'].join(','));
+    rows.push(['Candidato A','Candidato B','Voti totali',...Array.from({length:N},(_,i)=>'Sez.'+(i+1))].join(','));
+    const sett=Object.entries(t[setk]||{}).map(([k,v])=>{const[a,b]=k.split('-').map(n=>parseInt(n));return{a,b,key:k,v:num(v)}}).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+    sett.forEach(x=>{
+      const cA=cands[x.a],cB=cands[x.b];
+      if(!cA||!cB)return;
+      const sez=Array.from({length:N},(_,i)=>{const s=allData[i+1]||defSez();return num(s[setk]&&s[setk][x.key])});
+      rows.push([q(cA.nome),q(cB.nome),x.v,...sez].join(','));
+    });
+  }
+
+  const csv='\uFEFF'+rows.join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download='analytics_'+COMUNE.toLowerCase()+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  fbLogEvent({tipo:'export_analytics_csv',ruolo:userRole});
+}
+
 function exportListCSV(idx){
   const listName=listaNomi[idx];
   const cands=CANDS[idx]||[];
@@ -2360,6 +2878,8 @@ window.annullaScheda=annullaScheda;
 window.showStoricoSchede=showStoricoSchede;window.confermaAnnulla=confermaAnnulla;
 window.setTicketTab=setTicketTab;window.showPublicDash=showPublicDash;
 window.showRappMenu=showRappMenu;window.showSezStats=showSezStats;
+window.showAnalytics=showAnalytics;window.setAnalyticsTab=setAnalyticsTab;
+window.setAnalyticsLista=setAnalyticsLista;window.exportAnalyticsCSV=exportAnalyticsCSV;
 </script>
 </body>
 </html>
