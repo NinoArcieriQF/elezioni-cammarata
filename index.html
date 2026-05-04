@@ -1705,6 +1705,42 @@ function renDash(){
       <div class="kpi"><div class="kl">Voti sindaco / lista</div><div class="kv" id="d-vv" style="font-size:18px">${fn(t.tv)} <span style="color:var(--tx3)">·</span> ${fn(t.tvl)}</div><div class="ks" id="d-bnu">${fn(t.bi)} bianche · ${fn(t.nu)} nulle</div></div>
       <div class="kpi"><div class="kl">Sezioni · Disgiunti</div><div class="kv" id="d-sez">${done}<span style="font-size:14px;font-weight:400;color:var(--tx3)"> /${N}</span></div><div class="ks">${fn(t.vd)} schede disgiunte</div></div>
     </div>
+
+    <!-- ═══ GRAFICI: ciambella affluenza + 2 torte ═══ -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:1rem;margin-bottom:1rem">
+      <div class="card" style="margin:0;text-align:center">
+        <span class="ct">affluenza</span>
+        <div style="position:relative;max-width:200px;margin:0 auto">
+          <canvas id="d-donut-aff" height="180"></canvas>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
+            <div id="d-donut-aff-pct" style="font-size:24px;font-weight:700;font-family:'DM Mono',monospace;color:var(--c1)">${pct(t.aff)}</div>
+            <div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">votanti</div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--tx3);margin-top:6px"><span id="d-donut-aff-n">${fn(t.vt)}</span> / ${fn(t.el)} elettori</p>
+      </div>
+      <div class="card" style="margin:0;text-align:center">
+        <span class="ct">voti sindaco</span>
+        <div style="max-width:200px;margin:0 auto">
+          <canvas id="d-pie-sind" height="180"></canvas>
+        </div>
+        <div style="display:flex;justify-content:space-around;margin-top:8px;font-size:11px">
+          <span style="color:var(--c1)"><strong id="d-pie-sind-p1">${pct(t.pc1)}</strong> ${C1.nome.split(' ').slice(-1)[0]}</span>
+          <span style="color:var(--c2)"><strong id="d-pie-sind-p2">${pct(t.pc2)}</strong> ${C2.nome.split(' ').slice(-1)[0]}</span>
+        </div>
+      </div>
+      <div class="card" style="margin:0;text-align:center">
+        <span class="ct">voti lista</span>
+        <div style="max-width:200px;margin:0 auto">
+          <canvas id="d-pie-lista" height="180"></canvas>
+        </div>
+        <div style="display:flex;justify-content:space-around;margin-top:8px;font-size:11px">
+          <span style="color:var(--c1)"><strong id="d-pie-lista-p1">${pct(t.pl1)}</strong> ${listaNomi[0].split(' ')[0]}</span>
+          <span style="color:var(--c2)"><strong id="d-pie-lista-p2">${pct(t.pl2)}</strong> ${listaNomi[1].split(' ')[0]}</span>
+        </div>
+      </div>
+    </div>
+
     <p class="ct" style="margin-top:1rem;margin-bottom:8px">voti candidati sindaco</p>
     <div class="cg">
       <div class="cb cb1"><div class="cl2">SINDACO</div><div class="cn">${C1.nome}</div><div class="cv" id="d-vc1">${fn(t.vc1)}</div><div class="cp" id="d-pc1">${pct(t.pc1)} dei sindaci</div><div class="pt"><div class="pf" id="d-b1" style="background:var(--c1);width:${pct(t.pc1)}"></div></div></div>
@@ -1801,8 +1837,62 @@ function initCharts(){
     });
   };
   charts.p1=mkP('ch-p1',s1,'#1B5299');charts.p2=mkP('ch-p2',s2,'#B84020');
+
+  // ═══ Grafici dashboard generale: ciambella affluenza + 2 torte ═══
+  charts.dAff=mkDonutAffluenza('d-donut-aff',t.vt,t.el);
+  charts.dPieSind=mkPie('d-pie-sind',[t.vc1,t.vc2],['#1B5299','#B84020'],[C1.nome.split(' ').slice(-1)[0],C2.nome.split(' ').slice(-1)[0]]);
+  charts.dPieLista=mkPie('d-pie-lista',[t.vl1,t.vl2],['#1B5299','#B84020'],[listaNomi[0].split(' ')[0],listaNomi[1].split(' ')[0]]);
+
   renderProiezioneContent();
 }
+
+/* ══ HELPER GRAFICI: ciambella e torta riutilizzabili ═══════ */
+function mkDonutAffluenza(id,votanti,elettori){
+  const ctx=$(id);if(!ctx)return null;
+  const v=Math.max(0,votanti),e=Math.max(1,elettori),mancanti=Math.max(0,e-v);
+  return new Chart(ctx,{
+    type:'doughnut',
+    data:{datasets:[{data:[v,mancanti],backgroundColor:['#1B5299','#EBE8E2'],borderColor:'#FAFAF7',borderWidth:2,cutout:'72%'}]},
+    options:{responsive:true,maintainAspectRatio:true,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const lbl=c.dataIndex===0?'Votanti':'Mancanti';return ' '+lbl+': '+fn(c.parsed)+' ('+(c.parsed/e*100).toFixed(1)+'%)'}}}},
+      animation:{duration:600}
+    }
+  });
+}
+function mkPie(id,values,colors,labels){
+  const ctx=$(id);if(!ctx)return null;
+  const tot=values.reduce((a,b)=>a+b,0);
+  // Se tutti zero, mostra placeholder grigio
+  const data=tot===0?[1]:values;
+  const cols=tot===0?['#EBE8E2']:colors;
+  const lbls=tot===0?['In attesa di dati']:labels;
+  return new Chart(ctx,{
+    type:'pie',
+    data:{labels:lbls,datasets:[{data:data,backgroundColor:cols,borderColor:'#FAFAF7',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:true,
+      plugins:{legend:{display:false},tooltip:{
+        enabled:tot>0,
+        callbacks:{label:c=>' '+c.label+': '+fn(c.parsed)+' ('+(tot>0?(c.parsed/tot*100).toFixed(1):0)+'%)'}
+      }},
+      animation:{duration:600}
+    }
+  });
+}
+function updDonutAffluenza(ch,votanti,elettori){
+  if(!ch)return;
+  const v=Math.max(0,votanti),e=Math.max(1,elettori),mancanti=Math.max(0,e-v);
+  ch.data.datasets[0].data=[v,mancanti];
+  ch.update('none');
+}
+function updPie(ch,values,colors){
+  if(!ch)return;
+  const tot=values.reduce((a,b)=>a+b,0);
+  ch.data.datasets[0].data=tot===0?[1]:values;
+  ch.data.datasets[0].backgroundColor=tot===0?['#EBE8E2']:colors;
+  ch.options.plugins.tooltip.enabled=tot>0;
+  ch.update('none');
+}
+
 function updDash(){
   if(view!=='dash')return;
   const t=totals(allData),done=Object.values(allData).filter(d=>d.done).length;
@@ -1821,6 +1911,17 @@ function updDash(){
   set('d-vl2',fn(t.vl2));set('d-pl2',pct(t.pl2)+' delle liste');
   const bl1=$('d-bl1');if(bl1)bl1.style.width=pct(t.pl1);
   const bl2=$('d-bl2');if(bl2)bl2.style.width=pct(t.pl2);
+
+  // Aggiorna grafici torte e ciambella affluenza
+  updDonutAffluenza(charts.dAff,t.vt,t.el);
+  set('d-donut-aff-pct',pct(t.aff));
+  set('d-donut-aff-n',fn(t.vt));
+  updPie(charts.dPieSind,[t.vc1,t.vc2],['#1B5299','#B84020']);
+  set('d-pie-sind-p1',pct(t.pc1));
+  set('d-pie-sind-p2',pct(t.pc2));
+  updPie(charts.dPieLista,[t.vl1,t.vl2],['#1B5299','#B84020']);
+  set('d-pie-lista-p1',pct(t.pl1));
+  set('d-pie-lista-p2',pct(t.pl2));
   // Tabella sezioni
   const tb=$('d-tb');if(tb)tb.innerHTML=tblRows(allData);
   // Grafici
@@ -1861,6 +1962,41 @@ function showPublicDash(){
       <div><div class="tb-t">${COMUNE} — Risultati in diretta</div>
       <div class="tb-s">${DATA_EL} · vista pubblica · <span id="live-clk"></span> · <span class="conn-indicator conn ${isOnline?'':'off'}">${isOnline?'<span class="asdot"></span> live':'<span class="asdot off"></span> offline'}</span></div></div>
       <span class="badge bok">${done}/${N} sezioni</span>
+    </div>
+
+    <!-- ═══ HERO: ciambella affluenza + 2 torte ═══ -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:1rem">
+      <div class="card" style="margin:0;text-align:center">
+        <span class="ct">affluenza</span>
+        <div style="position:relative;max-width:200px;margin:0 auto">
+          <canvas id="pd-donut-aff" height="180"></canvas>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
+            <div id="pd-donut-aff-pct" style="font-size:24px;font-weight:700;font-family:'DM Mono',monospace;color:var(--c1)">${pct(t.aff)}</div>
+            <div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">votanti</div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--tx3);margin-top:6px"><span id="pd-donut-aff-n">${fn(t.vt)}</span> / ${fn(t.el)} elettori</p>
+      </div>
+      <div class="card" style="margin:0;text-align:center">
+        <span class="ct">voti sindaco</span>
+        <div style="max-width:200px;margin:0 auto">
+          <canvas id="pd-pie-sind" height="180"></canvas>
+        </div>
+        <div style="display:flex;justify-content:space-around;margin-top:8px;font-size:11px">
+          <span style="color:var(--c1)"><strong id="pd-pie-sind-p1">${pct(t.pc1)}</strong> ${C1.nome.split(' ').slice(-1)[0]}</span>
+          <span style="color:var(--c2)"><strong id="pd-pie-sind-p2">${pct(t.pc2)}</strong> ${C2.nome.split(' ').slice(-1)[0]}</span>
+        </div>
+      </div>
+      <div class="card" style="margin:0;text-align:center">
+        <span class="ct">voti lista</span>
+        <div style="max-width:200px;margin:0 auto">
+          <canvas id="pd-pie-lista" height="180"></canvas>
+        </div>
+        <div style="display:flex;justify-content:space-around;margin-top:8px;font-size:11px">
+          <span style="color:var(--c1)"><strong id="pd-pie-lista-p1">${pct(t.pl1)}</strong> ${listaNomi[0].split(' ')[0]}</span>
+          <span style="color:var(--c2)"><strong id="pd-pie-lista-p2">${pct(t.pl2)}</strong> ${listaNomi[1].split(' ')[0]}</span>
+        </div>
+      </div>
     </div>
 
     <div class="kg">
@@ -1923,6 +2059,11 @@ function showPublicDash(){
   };
   charts.pub1=mkPub('pd-ch1',s1,'#1B5299');
   charts.pub2=mkPub('pd-ch2',s2,'#B84020');
+
+  // Hero charts: ciambella affluenza + 2 torte
+  charts.pdAff=mkDonutAffluenza('pd-donut-aff',t.vt,t.el);
+  charts.pdPieSind=mkPie('pd-pie-sind',[t.vc1,t.vc2],['#1B5299','#B84020'],[C1.nome.split(' ').slice(-1)[0],C2.nome.split(' ').slice(-1)[0]]);
+  charts.pdPieLista=mkPie('pd-pie-lista',[t.vl1,t.vl2],['#1B5299','#B84020'],[listaNomi[0].split(' ')[0],listaNomi[1].split(' ')[0]]);
 }
 
 // Update della dashboard pubblica (chiamata dal listener Firebase)
@@ -1957,6 +2098,17 @@ function updPublicDash(){
   };
   updCh(charts.pub1,CANDS[0],'p1');
   updCh(charts.pub2,CANDS[1],'p2');
+
+  // Aggiorna hero charts
+  updDonutAffluenza(charts.pdAff,t.vt,t.el);
+  set('pd-donut-aff-pct',pct(t.aff));
+  set('pd-donut-aff-n',fn(t.vt));
+  updPie(charts.pdPieSind,[t.vc1,t.vc2],['#1B5299','#B84020']);
+  set('pd-pie-sind-p1',pct(t.pc1));
+  set('pd-pie-sind-p2',pct(t.pc2));
+  updPie(charts.pdPieLista,[t.vl1,t.vl2],['#1B5299','#B84020']);
+  set('pd-pie-lista-p1',pct(t.pl1));
+  set('pd-pie-lista-p2',pct(t.pl2));
 }
 
 /* ══ RENDER CONTENUTO PROIEZIONE CONSIGLIO ═════════════════ */
@@ -2610,8 +2762,8 @@ function renAnalyticsContent(){
                 };
                 return `<tr>
                   <td style="font-weight:600;color:var(--tx3);font-family:'DM Mono',monospace">${pos+1}</td>
-                  <td style="font-size:12px;display:flex;align-items:center;gap:5px">${gB(x.candA.genere)}${x.candA.nome}</td>
-                  <td style="font-size:12px;display:flex;align-items:center;gap:5px">${gB(x.candB.genere)}${x.candB.nome}</td>
+                  <td style="font-size:12px"><span style="display:inline-flex;align-items:center;gap:5px">${gB(x.candA.genere)}${x.candA.nome}</span></td>
+                  <td style="font-size:12px"><span style="display:inline-flex;align-items:center;gap:5px">${gB(x.candB.genere)}${x.candB.nome}</span></td>
                   <td style="background:${heatBg(x.voti)};font-weight:700;color:${col};font-family:'DM Mono',monospace">${fn(x.voti)}</td>
                   ${sez.map(v=>`<td style="background:${heatSez(v)};font-family:'DM Mono',monospace;text-align:center;font-size:11px">${v>0?fn(v):'—'}</td>`).join('')}
                 </tr>`;
@@ -2675,8 +2827,8 @@ function renAnalyticsContent(){
                 };
                 return `<tr>
                   <td style="font-weight:600;color:var(--tx3);font-family:'DM Mono',monospace">${pos+1}</td>
-                  <td style="font-size:12px;display:flex;align-items:center;gap:5px">${gB(x.candA.genere)}${x.candA.nome}</td>
-                  <td style="font-size:12px;display:flex;align-items:center;gap:5px">${gB(x.candB.genere)}${x.candB.nome}</td>
+                  <td style="font-size:12px"><span style="display:inline-flex;align-items:center;gap:5px">${gB(x.candA.genere)}${x.candA.nome}</span></td>
+                  <td style="font-size:12px"><span style="display:inline-flex;align-items:center;gap:5px">${gB(x.candB.genere)}${x.candB.nome}</span></td>
                   <td style="background:${heatBg(x.voti)};font-weight:700;color:${col};font-family:'DM Mono',monospace">${fn(x.voti)}</td>
                   ${sez.map(v=>`<td style="background:${heatSez(v)};font-family:'DM Mono',monospace;text-align:center;font-size:11px">${v>0?fn(v):'—'}</td>`).join('')}
                 </tr>`;
