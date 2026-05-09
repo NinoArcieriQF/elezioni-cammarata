@@ -29,7 +29,7 @@ body{font-family:'DM Sans',sans-serif;background:#F5F3EE;color:#1A1A18;min-heigh
 .bg{background:var(--gn);color:#fff;border-color:#1E4D25}.bg:hover{background:#245A2C}
 .bd2{color:#8B1A1A;border-color:#C44}.bd2:hover{background:#FEF0F0}
 .bw{width:100%;padding:14px;font-size:15px}.blg{padding:16px;font-size:16px;font-weight:600}
-.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .sc{padding:18px 6px;background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);text-align:center;cursor:pointer;transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:4px}
 .sc:hover{border-color:var(--c1);background:var(--c1l)}.sc.done{border-color:var(--gn);background:var(--gnl)}.sc.part{border-color:var(--c1m)}
 .sc .sn{font-size:22px;font-weight:700}.sc .ss{font-size:10px;color:var(--tx3);font-family:'DM Mono',monospace}
@@ -132,11 +132,11 @@ body{font-family:'DM Sans',sans-serif;background:#F5F3EE;color:#1A1A18;min-heigh
 <script>
 const COMUNE  = 'Cammarata';
 const DATA_EL = '24-25 Maggio 2026';
-const N       = 6;      // numero sezioni
+const N       = 8;      // numero sezioni
 const MPREF   = 2;      // max preferenze per scheda
 
 // Numero elettori per sezione (N valori) — sostituisci con dati reali
-const EL = [620, 584, 601, 557, 612, 590];
+const EL = [1200,1200,1200,1200,1200,1200,1200,1200];
 
 // Candidati sindaco
 const C1 = { nome: 'Giuseppe Mangiapane', lista: 'Costruire Orizzonti' };
@@ -204,7 +204,7 @@ window.dispatchEvent(new Event('fb-ready'));
     </div>
     <div id="pw-sez" style="display:none;margin-bottom:14px">
       <p style="font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">La tua sezione</p>
-      <div id="pw-sez-g" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px"></div>
+      <div id="pw-sez-g" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px"></div>
     </div>
     <input type="password" class="pwi" id="pw-inp" placeholder="••••" maxlength="6" inputmode="numeric">
     <div id="pw-err" style="font-size:12px;color:#C44;text-align:center;min-height:16px;margin-bottom:8px"></div>
