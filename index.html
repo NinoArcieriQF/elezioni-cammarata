@@ -789,6 +789,7 @@ function totals(d){
   const p1={},p2={};
   const singoli1={},singoli2={};
   const coppieOrd1={},coppieOrd2={},coppieSet1={},coppieSet2={};
+  
   for(let i=1;i<=N;i++){
     const s=d[i]||defSez();
     vt+=num(s.votanti);bi+=num(s.bianche);nu+=num(s.nulle);
@@ -797,6 +798,7 @@ function totals(d){
     el+=EL[i-1];vd+=num(s.vd);
     n0pref1+=num(s.n0pref1);n1pref1+=num(s.n1pref1);n2pref1+=num(s.n2pref1);
     n0pref2+=num(s.n0pref2);n1pref2+=num(s.n1pref2);n2pref2+=num(s.n2pref2);
+    
     for(let j=0;j<12;j++){
       p1[j]=(p1[j]||0)+num(s.p1&&s.p1[j]);
       p2[j]=(p2[j]||0)+num(s.p2&&s.p2[j]);
@@ -808,8 +810,10 @@ function totals(d){
     for(const k in (s.coppieSet1||{})){coppieSet1[k]=(coppieSet1[k]||0)+num(s.coppieSet1[k])}
     for(const k in (s.coppieSet2||{})){coppieSet2[k]=(coppieSet2[k]||0)+num(s.coppieSet2[k])}
   }
+  
   const tv=vc1+vc2;
   const tvl=vl1+vl2;
+  
   return{vt,bi,nu,vc1,vc2,vl1,vl2,el,tv,tvl,p1,p2,vd,
     singoli1,singoli2,
     n0pref1,n1pref1,n2pref1,n0pref2,n1pref2,n2pref2,
