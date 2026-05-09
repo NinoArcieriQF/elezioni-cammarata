@@ -1226,195 +1226,219 @@ function togPref(j){
 }
 
 async function confirmBallot(){
-  const d=bData;
-  const schN=num(fd.votanti)+1;
-  const ci=d.lista===1?0:d.lista===2?1:null;
-  const isDisgiunto=d.tipo==='valida' && (d.sindaco===1||d.sindaco===2) && (d.lista===1||d.lista===2) && d.sindaco!==d.lista;
+  const d=bData;
+  const schN=num(fd.votanti)+1;
+  const ci=d.lista===1?0:d.lista===2?1:null;
+  const isDisgiunto=d.tipo==='valida' && (d.sindaco===1||d.sindaco===2) && (d.lista===1||d.lista===2) && d.sindaco!==d.lista;
 
-  let riepilogoHTML='';
-  if(d.tipo==='bianca'){
-    showModal(`
-      <div style="padding:1.5rem;text-align:center">
-        <div style="font-size:48px;margin-bottom:8px">○</div>
-        <p style="font-size:18px;font-weight:700;margin-bottom:6px">Conferma scheda #${schN}</p>
-        <p style="font-size:14px;color:var(--tx2);margin-bottom:18px">Tipo: <strong>BIANCA</strong></p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <button class="btn bd2" style="padding:14px;font-size:14px" onclick="closeModal()">← Annulla</button>
-          <button class="btn bg" style="padding:14px;font-size:14px;font-weight:600" onclick="doSaveBallot()">✓ Conferma</button>
-        </div>
-      </div>
-    `);
-    return;
-  }
-  if(d.tipo==='nulla'){
-    showModal(`
-      <div style="padding:1.5rem;text-align:center">
-        <div style="font-size:48px;margin-bottom:8px;color:#C44">✕</div>
-        <p style="font-size:18px;font-weight:700;margin-bottom:6px">Conferma scheda #${schN}</p>
-        <p style="font-size:14px;color:var(--tx2);margin-bottom:18px">Tipo: <strong>NULLA</strong></p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <button class="btn bd2" style="padding:14px;font-size:14px" onclick="closeModal()">← Annulla</button>
-          <button class="btn bg" style="padding:14px;font-size:14px;font-weight:600" onclick="doSaveBallot()">✓ Conferma</button>
-        </div>
-      </div>
-    `);
-    return;
-  }
-  // Per scheda valida: popup completo con riepilogo
-    // Box sindaco
-    let sindBox='';
-    if(d.sindaco===1||d.sindaco===2){
-      const idx=d.sindaco-1;
-      const nome=idx===0?C1.nome:C2.nome;
-      const lista=listaNomi[idx];
-      const col=idx===0?'var(--c1)':'var(--c2)';
-      const bg=idx===0?'var(--c1l)':'var(--c2l)';
-      sindBox=`<div style="background:${bg};padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${col};margin-bottom:2px;font-weight:600">Sindaco · ${lista}</p>
-        <p style="font-size:14px;font-weight:600;color:${col}">${nome}</p>
-      </div>`;
-    }else{
-      sindBox=`<div style="background:var(--sf2);padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px;font-weight:600">Sindaco</p>
-        <p style="font-size:13px;color:var(--tx3)">Nessun voto</p>
-      </div>`;
-    }
-    // Box lista + preferenze combinate
-    let listaBox='';
-    if(d.lista===1||d.lista===2){
-      const idx=d.lista-1;
-      const nome=listaNomi[idx];
-      const col=idx===0?'var(--c1)':'var(--c2)';
-      const bg=idx===0?'var(--c1l)':'var(--c2l)';
-      const prefList=d.prefs.length>0
-        ? d.prefs.map((j,i)=>{
-            const c=CANDS[ci][j];
-            return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--sf);border-radius:6px;margin-bottom:3px">
-              <span style="min-width:18px;height:18px;border-radius:50%;background:${col};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">${i+1}</span>
-              <span style="font-size:12px;flex:1">${c.nome}</span>
-              ${gB(c.genere)}
-            </div>`;
-          }).join('')
-        : '<p style="font-size:11px;color:var(--tx3);padding:2px 0">Nessuna preferenza espressa</p>';
-      listaBox=`<div style="background:${bg};padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${col};margin-bottom:5px;font-weight:600">Lista e preferenze · ${nome}</p>
-        ${prefList}
-      </div>`;
-    }else{
-      listaBox=`<div style="background:var(--sf2);padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
-        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px;font-weight:600">Lista e preferenze</p>
-        <p style="font-size:13px;color:var(--tx3)">Nessun voto lista</p>
-      </div>`;
-    }
-    riepilogoHTML=sindBox+listaBox
-      +(isDisgiunto?`<div class="no nwa" style="margin-bottom:8px;font-size:12px">⚠ Voto disgiunto: sindaco e lista di schieramenti diversi</div>`:'');
+  // Snippet per il selettore di quantità (moltiplicatore)
+  const multHTML = `
+    <div style="margin-bottom:16px;background:var(--sf2);padding:10px 12px;border-radius:var(--rs);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:12px;font-weight:600">Salva più schede identiche:</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="btn" style="padding:4px 12px;font-size:16px" onclick="document.getElementById('ballot-multiplier').stepDown()">-</button>
+        <input type="number" id="ballot-multiplier" value="1" min="1" max="20" style="width:48px;text-align:center;font-size:16px;font-weight:600;padding:4px;border:1px solid var(--bd);border-radius:4px;background:var(--sf)" readonly>
+        <button class="btn" style="padding:4px 12px;font-size:16px" onclick="document.getElementById('ballot-multiplier').stepUp()">+</button>
+      </div>
+    </div>
+  `;
 
-  showModal(`
-    <div style="padding:1.5rem 1.5rem 1rem">
-      <p style="font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:4px">Conferma scheda — Sezione ${selSez}</p>
-      <p style="font-size:18px;font-weight:700;margin-bottom:14px">Scheda #${schN}</p>
-      ${riepilogoHTML}
-      <p style="font-size:12px;color:var(--tx2);text-align:center;margin-top:12px;margin-bottom:16px">Verifica che i dati siano corretti. Una volta confermata la scheda verrà salvata sul server.</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <button class="btn bd2" style="padding:12px;font-size:14px" onclick="closeModal()">← Modifica</button>
-        <button class="btn bg" style="padding:12px;font-size:14px;font-weight:600" onclick="doSaveBallot()">✓ Conferma e salva</button>
-      </div>
-    </div>
-  `);
+  let riepilogoHTML='';
+  if(d.tipo==='bianca'){
+    showModal(`
+      <div style="padding:1.5rem;text-align:center">
+        <div style="font-size:48px;margin-bottom:8px">○</div>
+        <p style="font-size:18px;font-weight:700;margin-bottom:6px">Conferma scheda #${schN}</p>
+        <p style="font-size:14px;color:var(--tx2);margin-bottom:18px">Tipo: <strong>BIANCA</strong></p>
+        ${multHTML}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn bd2" style="padding:14px;font-size:14px" onclick="closeModal()">← Annulla</button>
+          <button class="btn bg" style="padding:14px;font-size:14px;font-weight:600" onclick="doSaveBallot()">✓ Conferma</button>
+        </div>
+      </div>
+    `);
+    return;
+  }
+  if(d.tipo==='nulla'){
+    showModal(`
+      <div style="padding:1.5rem;text-align:center">
+        <div style="font-size:48px;margin-bottom:8px;color:#C44">✕</div>
+        <p style="font-size:18px;font-weight:700;margin-bottom:6px">Conferma scheda #${schN}</p>
+        <p style="font-size:14px;color:var(--tx2);margin-bottom:18px">Tipo: <strong>NULLA</strong></p>
+        ${multHTML}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn bd2" style="padding:14px;font-size:14px" onclick="closeModal()">← Annulla</button>
+          <button class="btn bg" style="padding:14px;font-size:14px;font-weight:600" onclick="doSaveBallot()">✓ Conferma</button>
+        </div>
+      </div>
+    `);
+    return;
+  }
+  // Per scheda valida: popup completo con riepilogo
+    // Box sindaco
+    let sindBox='';
+    if(d.sindaco===1||d.sindaco===2){
+      const idx=d.sindaco-1;
+      const nome=idx===0?C1.nome:C2.nome;
+      const lista=listaNomi[idx];
+      const col=idx===0?'var(--c1)':'var(--c2)';
+      const bg=idx===0?'var(--c1l)':'var(--c2l)';
+      sindBox=`<div style="background:${bg};padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${col};margin-bottom:2px;font-weight:600">Sindaco · ${lista}</p>
+        <p style="font-size:14px;font-weight:600;color:${col}">${nome}</p>
+      </div>`;
+    }else{
+      sindBox=`<div style="background:var(--sf2);padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px;font-weight:600">Sindaco</p>
+        <p style="font-size:13px;color:var(--tx3)">Nessun voto</p>
+      </div>`;
+    }
+    // Box lista + preferenze combinate
+    let listaBox='';
+    if(d.lista===1||d.lista===2){
+      const idx=d.lista-1;
+      const nome=listaNomi[idx];
+      const col=idx===0?'var(--c1)':'var(--c2)';
+      const bg=idx===0?'var(--c1l)':'var(--c2l)';
+      const prefList=d.prefs.length>0
+        ? d.prefs.map((j,i)=>{
+            const c=CANDS[ci][j];
+            return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--sf);border-radius:6px;margin-bottom:3px">
+              <span style="min-width:18px;height:18px;border-radius:50%;background:${col};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">${i+1}</span>
+              <span style="font-size:12px;flex:1">${c.nome}</span>
+              ${gB(c.genere)}
+            </div>`;
+          }).join('')
+        : '<p style="font-size:11px;color:var(--tx3);padding:2px 0">Nessuna preferenza espressa</p>';
+      listaBox=`<div style="background:${bg};padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${col};margin-bottom:5px;font-weight:600">Lista e preferenze · ${nome}</p>
+        ${prefList}
+      </div>`;
+    }else{
+      listaBox=`<div style="background:var(--sf2);padding:10px 12px;border-radius:var(--rs);margin-bottom:8px">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:2px;font-weight:600">Lista e preferenze</p>
+        <p style="font-size:13px;color:var(--tx3)">Nessun voto lista</p>
+      </div>`;
+    }
+    riepilogoHTML=sindBox+listaBox
+      +(isDisgiunto?`<div class="no nwa" style="margin-bottom:8px;font-size:12px">⚠ Voto disgiunto: sindaco e lista di schieramenti diversi</div>`:'');
+
+  showModal(`
+    <div style="padding:1.5rem 1.5rem 1rem">
+      <p style="font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);margin-bottom:4px">Conferma scheda — Sezione ${selSez}</p>
+      <p style="font-size:18px;font-weight:700;margin-bottom:14px">Scheda #${schN}</p>
+      ${riepilogoHTML}
+      ${multHTML}
+      <p style="font-size:12px;color:var(--tx2);text-align:center;margin-top:4px;margin-bottom:16px">Verifica che i dati siano corretti. Una volta confermata la scheda verrà salvata sul server.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn bd2" style="padding:12px;font-size:14px" onclick="closeModal()">← Modifica</button>
+        <button class="btn bg" style="padding:12px;font-size:14px;font-weight:600" onclick="doSaveBallot()">✓ Conferma e salva</button>
+      </div>
+    </div>
+  `);
 }
 
 async function doSaveBallot(){
-  closeModal();
-  const d=bData;
-  fd.votanti=(fd.votanti||0)+1;
-  if(d.tipo==='bianca')fd.bianche=(fd.bianche||0)+1;
-  else if(d.tipo==='nulla')fd.nulle=(fd.nulle||0)+1;
-  else{
-    // Voto sindaco
-    if(d.sindaco===1)fd.vc1=(fd.vc1||0)+1;
-    else if(d.sindaco===2)fd.vc2=(fd.vc2||0)+1;
-    // Voto lista (separato dal sindaco!)
-    if(d.lista===1)fd.vl1=(fd.vl1||0)+1;
-    else if(d.lista===2)fd.vl2=(fd.vl2||0)+1;
-    // Disgiunto
-    if((d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista){
-      fd.vd=(fd.vd||0)+1;
-      if(d.sindaco===1)fd.vd12=(fd.vd12||0)+1;
-      else fd.vd21=(fd.vd21||0)+1;
-    }
-    // Preferenze (dalla lista votata, solo se lista valida)
-    if(d.lista===1||d.lista===2){
-      const pk=d.lista===1?'p1':'p2';
-      if(!fd[pk])fd[pk]={};
-      d.prefs.forEach(j=>{fd[pk][j]=(fd[pk][j]||0)+1});
-      // Distribuzione preferenze (0/1/2 per lista)
-      const distKey=d.lista===1?'n':'n';
-      if(d.prefs.length===0){
-        if(d.lista===1)fd.n0pref1=(fd.n0pref1||0)+1;
-        else fd.n0pref2=(fd.n0pref2||0)+1;
-      }else if(d.prefs.length===1){
-        if(d.lista===1)fd.n1pref1=(fd.n1pref1||0)+1;
-        else fd.n1pref2=(fd.n1pref2||0)+1;
-        // Voto SECCO singolo: una sola preferenza
-        const singKey=d.lista===1?'singoli1':'singoli2';
-        if(!fd[singKey])fd[singKey]={};
-        fd[singKey][d.prefs[0]]=(fd[singKey][d.prefs[0]]||0)+1;
-      }else if(d.prefs.length===2){
-        if(d.lista===1)fd.n2pref1=(fd.n2pref1||0)+1;
-        else fd.n2pref2=(fd.n2pref2||0)+1;
-        // Accoppiate
-        const [a,b]=d.prefs;
-        const keyOrd=a+'>'+b;
-        const keySet=Math.min(a,b)+'-'+Math.max(a,b);
-        const kOrd=d.lista===1?'coppieOrd1':'coppieOrd2';
-        const kSet=d.lista===1?'coppieSet1':'coppieSet2';
-        if(!fd[kOrd])fd[kOrd]={};
-        if(!fd[kSet])fd[kSet]={};
-        fd[kOrd][keyOrd]=(fd[kOrd][keyOrd]||0)+1;
-        fd[kSet][keySet]=(fd[kSet][keySet]||0)+1;
-      }
-    }
-  }
-  // Storico ultime 10 schede
-  if(!fd.lastBallots)fd.lastBallots=[];
-  fd.lastBallots.push({
-    num:fd.votanti,
-    ts:new Date().toISOString(),
-    data:JSON.parse(JSON.stringify(d))
-  });
-  if(fd.lastBallots.length>10)fd.lastBallots.shift();
+  // Prendi il valore del moltiplicatore (di base è 1)
+  const multEl = document.getElementById('ballot-multiplier');
+  const mult = multEl ? parseInt(multEl.value) || 1 : 1;
+  
+  // Limite di sicurezza (massimo 20 schede in un colpo solo per evitare errori catastrofici)
+  if (mult < 1 || mult > 20) { alert('Quantità non valida.'); return; }
 
-  fd.upd=new Date().toISOString();
-  allData[selSez]=fd;cacheSave();
-  await fbSaveSez(selSez,fd);
-  fbLogEvent({tipo:'scheda',sezione:selSez,numScheda:fd.votanti,tipoScheda:d.tipo,sindaco:d.sindaco,lista:d.lista,nPrefs:d.prefs.length,disgiunto:(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista});
+  closeModal();
+  const d=bData;
+  const isDisgiunto=d.tipo==='valida' && (d.sindaco===1||d.sindaco===2) && (d.lista===1||d.lista===2) && d.sindaco!==d.lista;
 
-  // Per rappresentanti: rimani in modalità scrutinio, prepara prossima scheda
-  if(userRole==='rapp'){
-    const isD=(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista;
-    bData={tipo:null,sindaco:null,lista:null,prefs:[]};
-    view='ballot';
-    renBallot();
-    setTimeout(()=>{
-      // Toast di conferma in alto
-      const toast=document.createElement('div');
-      toast.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--gn);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.2);animation:fin .25s';
-      toast.textContent=`✓ Scheda #${num(fd.votanti)} salvata${isD?' · disgiunto':''}`;
-      document.body.appendChild(toast);
-      setTimeout(()=>{toast.style.opacity='0';toast.style.transition='opacity .3s';setTimeout(()=>toast.remove(),300)},1200);
-    },30);
-  } else {
-    // Coordinatore/Admin: torna a vista riepilogo sezione
-    view='sez';renSez();
-    setTimeout(()=>{
-      const m=$('sez-msg');
-      if(m){
-        const isD=(d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista;
-        m.innerHTML=`<div class="no nok">Scheda #${num(fd.votanti)} salvata sul server${isD?' · voto disgiunto':''}</div>`;
-        setTimeout(()=>{if(m)m.innerHTML=''},2800);
-      }
-    },30);
-  }
+  // Ripeti l'aggiunta logica N volte (in base al moltiplicatore)
+  for (let m = 0; m < mult; m++) {
+    fd.votanti=(fd.votanti||0)+1;
+    if(d.tipo==='bianca')fd.bianche=(fd.bianche||0)+1;
+    else if(d.tipo==='nulla')fd.nulle=(fd.nulle||0)+1;
+    else{
+      // Voto sindaco
+      if(d.sindaco===1)fd.vc1=(fd.vc1||0)+1;
+      else if(d.sindaco===2)fd.vc2=(fd.vc2||0)+1;
+      // Voto lista
+      if(d.lista===1)fd.vl1=(fd.vl1||0)+1;
+      else if(d.lista===2)fd.vl2=(fd.vl2||0)+1;
+      // Disgiunto
+      if((d.sindaco===1||d.sindaco===2)&&(d.lista===1||d.lista===2)&&d.sindaco!==d.lista){
+        fd.vd=(fd.vd||0)+1;
+        if(d.sindaco===1)fd.vd12=(fd.vd12||0)+1;
+        else fd.vd21=(fd.vd21||0)+1;
+      }
+      // Preferenze
+      if(d.lista===1||d.lista===2){
+        const pk=d.lista===1?'p1':'p2';
+        if(!fd[pk])fd[pk]={};
+        d.prefs.forEach(j=>{fd[pk][j]=(fd[pk][j]||0)+1});
+        // Distribuzione preferenze (0/1/2 per lista)
+        if(d.prefs.length===0){
+          if(d.lista===1)fd.n0pref1=(fd.n0pref1||0)+1;
+          else fd.n0pref2=(fd.n0pref2||0)+1;
+        }else if(d.prefs.length===1){
+          if(d.lista===1)fd.n1pref1=(fd.n1pref1||0)+1;
+          else fd.n1pref2=(fd.n1pref2||0)+1;
+          // Voto SECCO singolo
+          const singKey=d.lista===1?'singoli1':'singoli2';
+          if(!fd[singKey])fd[singKey]={};
+          fd[singKey][d.prefs[0]]=(fd[singKey][d.prefs[0]]||0)+1;
+        }else if(d.prefs.length===2){
+          if(d.lista===1)fd.n2pref1=(fd.n2pref1||0)+1;
+          else fd.n2pref2=(fd.n2pref2||0)+1;
+          // Accoppiate
+          const [a,b]=d.prefs;
+          const keyOrd=a+'>'+b;
+          const keySet=Math.min(a,b)+'-'+Math.max(a,b);
+          const kOrd=d.lista===1?'coppieOrd1':'coppieOrd2';
+          const kSet=d.lista===1?'coppieSet1':'coppieSet2';
+          if(!fd[kOrd])fd[kOrd]={};
+          if(!fd[kSet])fd[kSet]={};
+          fd[kOrd][keyOrd]=(fd[kOrd][keyOrd]||0)+1;
+          fd[kSet][keySet]=(fd[kSet][keySet]||0)+1;
+        }
+      }
+    }
+    // Storico ultime schede (salva ogni singola scheda generata dal moltiplicatore per permettere l'annullamento preciso)
+    if(!fd.lastBallots)fd.lastBallots=[];
+    fd.lastBallots.push({
+      num:fd.votanti,
+      ts:new Date().toISOString(),
+      data:JSON.parse(JSON.stringify(d))
+    });
+    if(fd.lastBallots.length>10)fd.lastBallots.shift();
+  }
+
+  fd.upd=new Date().toISOString();
+  allData[selSez]=fd;cacheSave();
+  await fbSaveSez(selSez,fd);
+  fbLogEvent({tipo:'scheda',sezione:selSez,numScheda:fd.votanti,quantita:mult,tipoScheda:d.tipo,sindaco:d.sindaco,lista:d.lista,nPrefs:d.prefs.length,disgiunto:isDisgiunto});
+
+  // Aggiornamento Interfaccia Utente
+  const toastMsg = mult > 1 ? `✓ Inserite ${mult} schede identiche` : `✓ Scheda #${num(fd.votanti)} salvata`;
+
+  if(userRole==='rapp'){
+    bData={tipo:null,sindaco:null,lista:null,prefs:[]};
+    view='ballot';
+    renBallot();
+    setTimeout(()=>{
+      const toast=document.createElement('div');
+      toast.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--gn);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.2);animation:fin .25s';
+      toast.textContent=toastMsg + (isDisgiunto?' · disgiunto':'');
+      document.body.appendChild(toast);
+      setTimeout(()=>{toast.style.opacity='0';toast.style.transition='opacity .3s';setTimeout(()=>toast.remove(),300)},1400);
+    },30);
+  } else {
+    view='sez';renSez();
+    setTimeout(()=>{
+      const m=$('sez-msg');
+      if(m){
+        m.innerHTML=`<div class="no nok">${toastMsg} sul server${isDisgiunto?' · voto disgiunto':''}</div>`;
+        setTimeout(()=>{if(m)m.innerHTML=''},2800);
+      }
+    },30);
+  }
 }
 
 async function undoLast(){
