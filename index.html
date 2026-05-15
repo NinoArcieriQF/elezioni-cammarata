@@ -222,6 +222,7 @@ window.dispatchEvent(new Event('fb-ready'));
 </div>
 
 <div id="app-root" style="display:none">
+  <div id="montecarlo-container"></div>
   <div id="root" style="max-width:640px;margin:0 auto;padding:0 1rem 3rem"></div>
 </div>
 
@@ -895,6 +896,7 @@ function checkPw(){
     if(pw!==PIN_RAPP){err.textContent='PIN errato';return}
     userRole='rapp';userSez=selSezLogin;
   }
+  window.userRole = userRole; window.allData = allData; window.totals = totals; window.CANDS = CANDS;
   fbLogEvent({tipo:'login',ruolo:userRole,sezione:userSez});
   $('pw-screen').style.display='none';$('app-root').style.display='block';
   startBackupTimer();
