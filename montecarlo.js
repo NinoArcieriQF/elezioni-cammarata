@@ -19,6 +19,48 @@ let mcChart = null;
 let mcDisplayPct = { traina: 50, mang: 50 };
 let mcAnimFrame = null;
 
+/* ── MOTORE STOCASTICO (Bayes & Monte Carlo) ──────────────── */
+function randNormal() {
+  let u = 0, v = 0;
+  while(u === 0) u = Math.random();
+  while(v === 0) v = Math.random();
+  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
+function randGamma(shape) {
+  let d, c, x, v, u;
+  if (shape < 1) return randGamma(shape + 1) * Math.pow(Math.random(), 1.0 / shape);
+  d = shape - 1.0 / 3.0;
+  c = 1.0 / Math.sqrt(9.0 * d);
+  while (true) {
+    do { x = randNormal(); v = 1.0 + c * x; } while (v <= 0.0);
+    v = v * v * v;
+    u = Math.random();
+    if (u < 1.0 - 0.0331 * x * x * x * x) return d * v;
+    if (Math.log(u) < 0.5 * x * x + d * (1.0 - v + Math.log(v))) return d * v;
+  }
+}
+
+function randBeta(alpha, beta) {
+  let g1 = randGamma(alpha);
+  let g2 = randGamma(beta);
+  return g1 / (g1 + g2);
+}
+
+function randBinomial(n, p) {
+  if (n === 0) return 0;
+  if (n > 30) {
+    let mean = n * p;
+    let std = Math.sqrt(n * p * (1 - p));
+    let val = Math.round(randNormal() * std + mean);
+    return Math.max(0, Math.min(n, val));
+  }
+  let k = 0;
+  for(let i = 0; i < n; i++) { if(Math.random() < p) k++; }
+  return k;
+}
+/* ────────────────────────────────────────────────────────── */
+
 /* ── Soglie confidenza ───────────────────────────────────── */
 function getConfidenceLevel(vt) {
   const v = num(vt);
@@ -76,136 +118,42 @@ function getConfidenceLevel(vt) {
     officialBadge: true
   };
 }
-
-/* ── Estrae stream schede valide da lastBallots ─────────── */
-function mcBallotStream(sezNum) {
-  const s = allData[sezNum] || defSez();
-  if (!s.lastBallots || !s.lastBallots.length) return [];
-  return s.lastBallots
-    .map(b => b.data)
-    .filter(d => d && d.tipo === 'valida' && !d._annullataEx);
-}
-
-/* ── Trend per sezione (ultime 50 / 100 schede) ─────────── */
-/* ── Trend per sezione (ultime 50 / 100 schede) ─────────── */
+/* ── Aggiornamento Bayesiano per sezione ─────────── */
 function calculateTrendsBySezione() {
   const trends = [];
   
-  // --- PARAMETRI DI STABILIZZAZIONE (Puoi regolarli) ---
-  const SOGLIA_50 = 20;    // [MODIFICA 2] Prima era 8. Minimo schede recenti necessarie
-  const SOGLIA_100 = 35;   // [MODIFICA 2] Prima era 5. Minimo schede per il lotto da 100
-  const PESO_RECENTE = 0.35; // [MODIFICA 1] Inerzia: il trend recente pesa al 35%, lo storico al 65%
-  // -----------------------------------------------------
+  const PRIOR_ALPHA = 1.5; 
+  const PRIOR_BETA = 1.5;
 
   for (let i = 1; i <= N; i++) {
     const s = allData[i] || defSez();
     const el = EL[i - 1];
-    const stream = mcBallotStream(i);
-    const recent50 = stream.slice(-50);
-    const recent100 = stream.slice(-100);
 
-    let pTraina = 0.5, pMang = 0.5, pNone = 0.1;
-    let nValid = 0, nTraina = 0, nMang = 0, nNone = 0;
+    const vTraina = num(s.vc2);
+    const vMang = num(s.vc1);
+    const votanti = num(s.votanti);
 
-    const countSind = (arr) => {
-      let t = 0, m = 0, nn = 0;
-      arr.forEach(d => {
-        if (d.sindaco === 2) t++;
-        else if (d.sindaco === 1) m++;
-        else nn++;
-      });
-      return { t, m, nn, n: arr.length };
-    };
-
-    const c50 = countSind(recent50);
-    const c100 = countSind(recent100);
-
-    // [MODIFICA 1 PREPARAZIONE]: Calcoliamo prima lo storico generale della sezione
-    const tv = num(s.vc1) + num(s.vc2);
-    let pTrainaStorico = 0.5;
-    let pMangStorico = 0.5;
-    if (tv > 0) {
-      pTrainaStorico = num(s.vc2) / tv;
-      pMangStorico = num(s.vc1) / tv;
-    }
-
-    // [MODIFICA 2]: Uso le nuove soglie alzate (SOGLIA_50 invece di 8)
-    if (c50.n >= SOGLIA_50) {
-      nValid = c50.n;
-      nTraina = c50.t;
-      nMang = c50.m;
-      nNone = c50.nn;
-      const denom = Math.max(1, c50.n - c50.nn);
-      
-      let pTrainaRecente = c50.t / denom;
-      let pMangRecente = c50.m / denom;
-
-      // [MODIFICA 1]: Media pesata tra il picco recente e lo storico consolidato
-      pTraina = (pTrainaRecente * PESO_RECENTE) + (pTrainaStorico * (1 - PESO_RECENTE));
-      pMang = (pMangRecente * PESO_RECENTE) + (pMangStorico * (1 - PESO_RECENTE));
-      pNone = c50.nn / c50.n;
-
-    } else if (c100.n >= SOGLIA_100) { // [MODIFICA 2]: Uso SOGLIA_100 invece di 5
-      nValid = c100.n;
-      const denom = Math.max(1, c100.n - c100.nn);
-      
-      let pTrainaRecente = c100.t / denom;
-      let pMangRecente = c100.m / denom;
-
-      // [MODIFICA 1]: Media pesata anche qui
-      pTraina = (pTrainaRecente * PESO_RECENTE) + (pTrainaStorico * (1 - PESO_RECENTE));
-      pMang = (pMangRecente * PESO_RECENTE) + (pMangStorico * (1 - PESO_RECENTE));
-      pNone = c100.nn / c100.n;
-
-    } else {
-      // Se non ci sono abbastanza schede recenti, ci affidiamo solo allo storico
-      pTraina = pTrainaStorico;
-      pMang = pMangStorico;
-      nValid = num(s.votanti);
-    }
-
-    const sumPref = num(s.n0pref1) + num(s.n1pref1) + num(s.n2pref1) +
-      num(s.n0pref2) + num(s.n1pref2) + num(s.n2pref2);
-    const vl = num(s.vl1) + num(s.vl2);
-    const base = Math.max(1, vl || num(s.votanti));
-    const p0 = sumPref > 0 ? (num(s.n0pref1) + num(s.n0pref2)) / sumPref : 0.15;
-    const p1 = sumPref > 0 ? (num(s.n1pref1) + num(s.n1pref2)) / sumPref : 0.45;
-    const p2 = sumPref > 0 ? (num(s.n2pref1) + num(s.n2pref2)) / sumPref : 0.4;
-
-    const vdRate = num(s.votanti) > 0 ? num(s.vd) / num(s.votanti) : 0.05;
+    const alpha = PRIOR_ALPHA + vTraina;
+    const beta = PRIOR_BETA + vMang;
 
     const expectedAtPoll = Math.round(el * MC_AFFLUENZA);
-    const remaining = Math.max(0, expectedAtPoll - num(s.votanti));
+    let remaining = Math.max(0, expectedAtPoll - votanti);
+
+    const validRate = votanti > 0 ? (vTraina + vMang) / votanti : 0.95;
+    const validRemaining = Math.round(remaining * validRate);
 
     trends.push({
       sez: i,
-      el,
-      votanti: num(s.votanti),
-      remaining,
-      expectedAtPoll,
-      // [MODIFICA 3]: Clamp stretto da 0.05/0.95 a 0.15/0.85 per tagliare le code estreme
-      pTraina: clamp(pTraina, 0.15, 0.85), 
-      pMang: clamp(pMang, 0.15, 0.85),
-      pNone: clamp(pNone, 0, 0.35),
-      p0pref: clamp(p0, 0, 1),
-      p1pref: clamp(p1, 0, 1),
-      p2pref: clamp(p2, 0, 1),
-      vdRate: clamp(vdRate, 0, 0.25),
-      nValid
+      alpha,
+      beta,
+      remainingValid: validRemaining,
+      expectedAtPoll
     });
   }
   return trends;
 }
 
 function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
-
-function mcPickSindaco(tr) {
-  const r = Math.random();
-  if (r < tr.pNone) return 0;
-  const r2 = Math.random();
-  const pT = tr.pTraina / (tr.pTraina + tr.pMang);
-  return r2 < pT ? 2 : 1;
-}
 
 /* ── Certezza matematica (senza simulazione) ─────────────── */
 function mcMathCertainty(trends, vc1, vc2) {
@@ -258,15 +206,21 @@ function runMonteCarlo() {
 
     for (let si = 0; si < N; si++) {
       const tr = trends[si];
-      let addT = 0, addM = 0;
-      for (let b = 0; b < tr.remaining; b++) {
-        const v = mcPickSindaco(tr);
-        if (v === 1) addM++;
-        else if (v === 2) addT++;
+      
+      if (tr.remainingValid > 0) {
+        // Estrazione probabilità dalla distribuzione Beta
+        const thetaTraina = randBeta(tr.alpha, tr.beta);
+        
+        // Simulazione schede rimanenti con Binomiale (o approssimazione Normale)
+        const addT = randBinomial(tr.remainingValid, thetaTraina);
+        const addM = tr.remainingValid - addT;
+        
+        vc1 += addM;
+        vc2 += addT;
+        margins[si] = addT - addM;
+      } else {
+        margins[si] = 0;
       }
-      vc1 += addM;
-      vc2 += addT;
-      margins[si] = addT - addM;
     }
 
     const pctT = (vc1 + vc2) > 0 ? vc2 / (vc1 + vc2) * 100 : 50;
@@ -279,7 +233,7 @@ function runMonteCarlo() {
     let bestSwing = -1;
     let bestSez = 0;
     for (let si = 0; si < N; si++) {
-      if (trends[si].remaining > 0 && Math.abs(margins[si]) > bestSwing) {
+      if (trends[si].remainingValid > 0 && Math.abs(margins[si]) > bestSwing) {
         bestSwing = Math.abs(margins[si]);
         bestSez = si;
       }
