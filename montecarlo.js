@@ -434,7 +434,6 @@ function mcRunCasinoAnimation() {
     div.style.background = Math.random() > 0.5 ? '#B84020' : '#1B5299';
     box.appendChild(div);
   }
-  }
 }
 
 /* ── Vista Monte Carlo ───────────────────────────────────── */
