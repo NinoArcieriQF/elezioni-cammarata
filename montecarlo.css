@@ -44,3 +44,40 @@
 .mc-summary{font-size:14px;line-height:1.65;color:var(--tx2);padding:12px 14px;background:var(--sf2);border-radius:var(--rs);border-left:4px solid var(--c1)}
 .mc-sez-decisiva{font-size:15px;font-weight:700;color:var(--c1t)}
 @media(max-width:600px){.mc-grid2{grid-template-columns:1fr}}
+
+/* Nuovi stili per Dashboard Bayesiana */
+.mc-data-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  flex: 1;
+}
+.mc-data-val {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+}
+.mc-data-lbl {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.5px;
+}
+.mc-pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #4ADE80;
+  border-radius: 50%;
+  margin-right: 6px;
+  animation: mc-pulse 1.5s infinite;
+}
+@keyframes mc-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}
