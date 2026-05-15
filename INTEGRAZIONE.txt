@@ -1,0 +1,25 @@
+INTEGRAZIONE MONTE CARLO — 3 passi
+==================================
+
+1) Nel <head>, DOPO il tuo <style> principale, aggiungi:
+   <link rel="stylesheet" href="montecarlo.css">
+
+2) PRIMA della chiusura </body> (dopo il tuo grande <script>), aggiungi:
+   <script src="montecarlo.js"></script>
+
+   Oppure: copia tutto il contenuto di montecarlo.css dentro <style>
+   e montecarlo.js dentro <script> prima di </script> finale.
+
+3) Nel listener onSnapshot di onFbReady(), aggiungi UNA riga (opzionale se usi montecarlo.js standalone — già ha listener proprio):
+   else if(view==='montecarlo')renMonteCarlo(false);
+
+4) Copia index.html nella cartella elezioni-cammarata insieme a montecarlo.css e montecarlo.js
+
+Dopo login admin/coord vedrai:
+- Badge live "Prob. Traina: XX%"
+- Pulsante "Previsioni Monte Carlo"
+
+Parametri modificabili in montecarlo.js:
+- MC_AFFLUENZA (0.725 = 72.5% attesa)
+- MC_SIMS_FULL (10000) / MC_SIMS_FAST (5000)
+- MC_DEBOUNCE_MS (500)
