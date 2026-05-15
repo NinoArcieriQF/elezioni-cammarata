@@ -1,23 +1,21 @@
 /* ═══════════════════════════════════════════════════════════
    MONTE CARLO — Previsioni elezioni Cammarata
-   Incolla questo file (e montecarlo.css) nel tuo index.html
-   OPPURE: incolla tutto il contenuto prima di </script> finale.
    Richiede: allData, totals, defSez, N, EL, C1, C2, $, fn, pct, num, view, userRole
 ═══════════════════════════════════════════════════════════ */
 
-const MC_AFFLUENZA = 0.725;        // 70–75% → media 72.5%
-const MC_SIMS_FULL = 10000;
-const MC_SIMS_FAST = 5000;
+const MC_AFFLUENZA   = 0.725;        // 70–75% → media 72.5%
+const MC_SIMS_FULL   = 10000;
+const MC_SIMS_FAST   = 5000;
 const MC_DEBOUNCE_MS = 500;
 const MC_HISTORY_MAX = 120;
 
-let mcResult = null;
-let mcComputing = false;
+let mcResult       = null;
+let mcComputing    = false;
 let mcDebounceTimer = null;
-let mcHistory = [];
-let mcChart = null;
-let mcDisplayPct = { traina: 50, mang: 50 };
-let mcAnimFrame = null;
+let mcHistory      = [];
+let mcChart        = null;
+let mcDisplayPct   = { traina: 50, mang: 50 };
+let mcAnimFrame    = null;
 
 /* ── MOTORE STOCASTICO (Bayes & Monte Carlo) ──────────────── */
 function randNormal() {
@@ -42,21 +40,21 @@ function randGamma(shape) {
 }
 
 function randBeta(alpha, beta) {
-  let g1 = randGamma(alpha);
-  let g2 = randGamma(beta);
+  const g1 = randGamma(alpha);
+  const g2 = randGamma(beta);
   return g1 / (g1 + g2);
 }
 
 function randBinomial(n, p) {
   if (n === 0) return 0;
   if (n > 30) {
-    let mean = n * p;
-    let std = Math.sqrt(n * p * (1 - p));
-    let val = Math.round(randNormal() * std + mean);
+    const mean = n * p;
+    const std  = Math.sqrt(n * p * (1 - p));
+    const val  = Math.round(randNormal() * std + mean);
     return Math.max(0, Math.min(n, val));
   }
   let k = 0;
-  for(let i = 0; i < n; i++) { if(Math.random() < p) k++; }
+  for (let i = 0; i < n; i++) { if (Math.random() < p) k++; }
   return k;
 }
 /* ────────────────────────────────────────────────────────── */
@@ -118,58 +116,50 @@ function getConfidenceLevel(vt) {
     officialBadge: true
   };
 }
-/* ── Aggiornamento Bayesiano per sezione ─────────── */
+
+/* ── Aggiornamento Bayesiano per sezione ─────────────────── */
 function calculateTrendsBySezione() {
-  const trends = [];
-  
-  const PRIOR_ALPHA = 1.5; 
-  const PRIOR_BETA = 1.5;
+  const trends     = [];
+  const PRIOR_ALPHA = 1.5;
+  const PRIOR_BETA  = 1.5;
 
   for (let i = 1; i <= N; i++) {
-    const s = allData[i] || defSez();
+    const s  = allData[i] || defSez();
     const el = EL[i - 1];
 
     const vTraina = num(s.vc2);
-    const vMang = num(s.vc1);
+    const vMang   = num(s.vc1);
     const votanti = num(s.votanti);
 
     const alpha = PRIOR_ALPHA + vTraina;
-    const beta = PRIOR_BETA + vMang;
+    const beta  = PRIOR_BETA  + vMang;
 
-    const expectedAtPoll = Math.round(el * MC_AFFLUENZA);
-    let remaining = Math.max(0, expectedAtPoll - votanti);
+    const expectedAtPoll  = Math.round(el * MC_AFFLUENZA);
+    const remaining       = Math.max(0, expectedAtPoll - votanti);
+    const validRate       = votanti > 0 ? (vTraina + vMang) / votanti : 0.95;
+    const validRemaining  = Math.round(remaining * validRate);
 
-    const validRate = votanti > 0 ? (vTraina + vMang) / votanti : 0.95;
-    const validRemaining = Math.round(remaining * validRate);
-
-    trends.push({
-      sez: i,
-      alpha,
-      beta,
-      remainingValid: validRemaining,
-      expectedAtPoll
-    });
+    trends.push({ sez: i, alpha, beta, remainingValid: validRemaining, expectedAtPoll });
   }
   return trends;
 }
 
-function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
-
 /* ── Certezza matematica (senza simulazione) ─────────────── */
+/* BUG FIX #2: era tr.remaining (undefined) → corretto in tr.remainingValid */
 function mcMathCertainty(trends, vc1, vc2) {
   let rem = 0;
-  trends.forEach(tr => { rem += tr.remaining; });
-  const mangWon = vc1 > vc2 + rem;
+  trends.forEach(tr => { rem += tr.remainingValid; });
+  const mangWon  = vc1 > vc2 + rem;
   const trainWon = vc2 > vc1 + rem;
   return { mangWon, trainWon, remaining: rem };
 }
 
 /* ── Simulazione Monte Carlo ─────────────────────────────── */
 function runMonteCarlo() {
-  const t = totals(allData);
-  const conf = getConfidenceLevel(t.vt);
+  const t      = totals(allData);
+  const conf   = getConfidenceLevel(t.vt);
   const trends = calculateTrendsBySezione();
-  const math = mcMathCertainty(trends, t.vc1, t.vc2);
+  const math   = mcMathCertainty(trends, t.vc1, t.vc2);
 
   if (!conf.showProjection) {
     return {
@@ -185,16 +175,14 @@ function runMonteCarlo() {
   const sims = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency <= 4)
     ? MC_SIMS_FAST : MC_SIMS_FULL;
 
-  const tvNow = t.vc1 + t.vc2;
+  const tvNow        = t.vc1 + t.vc2;
   const pctTrainaNow = tvNow > 0 ? t.vc2 / tvNow * 100 : 50;
 
-  let winsTraina = 0;
-  let winsMang = 0;
-  let ties = 0;
-  const finalPcts = new Float32Array(sims);
-  const decisiveCount = new Uint32Array(N);
-  const sezWonTraina = new Uint8Array(N);
-  const sezWonMang = new Uint8Array(N);
+  let winsTraina = 0, winsMang = 0, ties = 0;
+  const finalPcts      = new Float32Array(sims);
+  const decisiveCount  = new Uint32Array(N);
+  const sezWonTraina   = new Uint8Array(N);
+  const sezWonMang     = new Uint8Array(N);
 
   const baseVc1 = t.vc1;
   const baseVc2 = t.vc2;
@@ -206,15 +194,10 @@ function runMonteCarlo() {
 
     for (let si = 0; si < N; si++) {
       const tr = trends[si];
-      
       if (tr.remainingValid > 0) {
-        // Estrazione probabilità dalla distribuzione Beta
         const thetaTraina = randBeta(tr.alpha, tr.beta);
-        
-        // Simulazione schede rimanenti con Binomiale (o approssimazione Normale)
         const addT = randBinomial(tr.remainingValid, thetaTraina);
         const addM = tr.remainingValid - addT;
-        
         vc1 += addM;
         vc2 += addT;
         margins[si] = addT - addM;
@@ -226,49 +209,43 @@ function runMonteCarlo() {
     const pctT = (vc1 + vc2) > 0 ? vc2 / (vc1 + vc2) * 100 : 50;
     finalPcts[sim] = pctT;
 
-    if (vc2 > vc1) winsTraina++;
+    if      (vc2 > vc1) winsTraina++;
     else if (vc1 > vc2) winsMang++;
-    else ties++;
+    else                ties++;
 
-    let bestSwing = -1;
-    let bestSez = 0;
+    let bestSwing = -1, bestSez = 0;
     for (let si = 0; si < N; si++) {
       if (trends[si].remainingValid > 0 && Math.abs(margins[si]) > bestSwing) {
         bestSwing = Math.abs(margins[si]);
-        bestSez = si;
+        bestSez   = si;
       }
     }
     if (bestSwing >= 0) decisiveCount[bestSez]++;
   }
 
   finalPcts.sort();
-  const pTraina = winsTraina / sims;
-  const pMang = winsMang / sims;
-  const idx025 = Math.floor(sims * 0.025);
-  const idx975 = Math.floor(sims * 0.975);
-  const ciLow = finalPcts[idx025];
-  const ciHigh = finalPcts[idx975];
-  const ciMid = finalPcts[Math.floor(sims * 0.5)];
+  const pTraina  = winsTraina / sims;
+  const pMang    = winsMang  / sims;
+  const idx025   = Math.floor(sims * 0.025);
+  const idx975   = Math.floor(sims * 0.975);
+  const ciLow    = finalPcts[idx025];
+  const ciHigh   = finalPcts[idx975];
+  const ciMid    = finalPcts[Math.floor(sims * 0.5)];
 
-  let decisiveSez = 1;
-  let maxDec = 0;
+  let decisiveSez = 1, maxDec = 0;
   for (let i = 0; i < N; i++) {
-    if (decisiveCount[i] > maxDec) {
-      maxDec = decisiveCount[i];
-      decisiveSez = i + 1;
-    }
+    if (decisiveCount[i] > maxDec) { maxDec = decisiveCount[i]; decisiveSez = i + 1; }
   }
 
   for (let i = 0; i < N; i++) {
-    const s = allData[i + 1] || defSez();
+    const s  = allData[i + 1] || defSez();
     const tv = num(s.vc1) + num(s.vc2);
     if (tv > 0 && num(s.vc2) / tv > 0.55) sezWonTraina[i] = 1;
-    if (tv > 0 && num(s.vc1) / tv > 0.55) sezWonMang[i] = 1;
+    if (tv > 0 && num(s.vc1) / tv > 0.55) sezWonMang[i]   = 1;
   }
 
-  const lead = pctTrainaNow - (100 - pctTrainaNow);
-  const mathematicallyWon = math.trainWon || math.mangWon;
-  const mathWinner = math.trainWon ? 'traina' : math.mangWon ? 'mang' : null;
+  const lead            = pctTrainaNow - (100 - pctTrainaNow);
+  const mathWinner      = math.trainWon ? 'traina' : math.mangWon ? 'mang' : null;
 
   return {
     active: true,
@@ -287,8 +264,8 @@ function runMonteCarlo() {
     decisiveCount: maxDec,
     decisiveSimTotal: sims,
     sezWonTraina: Array.from(sezWonTraina).filter(Boolean).length,
-    sezWonMang: Array.from(sezWonMang).filter(Boolean).length,
-    mathematicallyWon,
+    sezWonMang:   Array.from(sezWonMang).filter(Boolean).length,
+    mathematicallyWon: math.trainWon || math.mangWon,
     mathWinner,
     math,
     trends,
@@ -302,23 +279,16 @@ function runMonteCarlo() {
 function mcPushHistory(res) {
   if (!res || !res.active) return;
   const t = totals(allData);
-  mcHistory.push({
-    ts: Date.now(),
-    vt: t.vt,
-    pTraina: res.pTraina * 100,
-    pctNow: res.pctTrainaNow
-  });
+  mcHistory.push({ ts: Date.now(), vt: t.vt, pTraina: res.pTraina * 100, pctNow: res.pctTrainaNow });
   if (mcHistory.length > MC_HISTORY_MAX) mcHistory.shift();
-  try {
-    localStorage.setItem('cam5_mc_history', JSON.stringify(mcHistory));
-  } catch (e) {}
+  try { localStorage.setItem('cam5_mc_history', JSON.stringify(mcHistory)); } catch(e) {}
 }
 
 function mcLoadHistory() {
   try {
     const r = localStorage.getItem('cam5_mc_history');
     if (r) mcHistory = JSON.parse(r);
-  } catch (e) {}
+  } catch(e) {}
 }
 
 /* ── Debounce ricalcolo ──────────────────────────────────── */
@@ -330,15 +300,14 @@ function scheduleMcUpdate() {
     if (view === 'montecarlo') renMonteCarlo(true);
     updateMcHomeBadge();
     requestAnimationFrame(() => {
-      const t0 = performance.now();
-      mcResult = runMonteCarlo();
+      const t0    = performance.now();
+      mcResult    = runMonteCarlo();
       mcPushHistory(mcResult);
       mcComputing = false;
       animateMcPct(mcResult);
       if (view === 'montecarlo') renMonteCarlo(false);
       updateMcHomeBadge();
-      const elapsed = performance.now() - t0;
-      if (elapsed > 250 && mcResult && mcResult.active) {
+      if (performance.now() - t0 > 250 && mcResult && mcResult.active) {
         mcResult._slow = true;
       }
     });
@@ -348,17 +317,17 @@ function scheduleMcUpdate() {
 function animateMcPct(res) {
   if (!res || !res.active) return;
   const targetT = res.pTraina * 100;
-  const targetM = res.pMang * 100;
+  const targetM = res.pMang   * 100;
   cancelAnimationFrame(mcAnimFrame);
   const startT = mcDisplayPct.traina;
   const startM = mcDisplayPct.mang;
   const t0 = performance.now();
   const dur = 600;
   function step(now) {
-    const p = Math.min(1, (now - t0) / dur);
+    const p    = Math.min(1, (now - t0) / dur);
     const ease = 1 - Math.pow(1 - p, 3);
     mcDisplayPct.traina = startT + (targetT - startT) * ease;
-    mcDisplayPct.mang = startM + (targetM - startM) * ease;
+    mcDisplayPct.mang   = startM + (targetM - startM) * ease;
     if (view === 'montecarlo') applyMcThermoDOM();
     if (p < 1) mcAnimFrame = requestAnimationFrame(step);
   }
@@ -366,14 +335,14 @@ function animateMcPct(res) {
 }
 
 function applyMcThermoDOM() {
-  const barM = $('mc-bar-mang');
-  const barT = $('mc-bar-train');
-  const pctEl = $('mc-thermo-pct');
-  if (barM) barM.style.width = mcDisplayPct.mang + '%';
-  if (barT) barT.style.width = mcDisplayPct.traina + '%';
+  const barM   = $('mc-bar-mang');
+  const barT   = $('mc-bar-train');
+  const pctEl  = $('mc-thermo-pct');
+  if (barM)  barM.style.width  = mcDisplayPct.mang   + '%';
+  if (barT)  barT.style.width  = mcDisplayPct.traina + '%';
   if (pctEl) {
     const lead = mcDisplayPct.traina >= mcDisplayPct.mang ? 'Traina' : 'Mangiapane';
-    const p = Math.max(mcDisplayPct.traina, mcDisplayPct.mang).toFixed(1);
+    const p    = Math.max(mcDisplayPct.traina, mcDisplayPct.mang).toFixed(1);
     pctEl.textContent = lead + ' ' + p + '%';
   }
 }
@@ -381,18 +350,18 @@ function applyMcThermoDOM() {
 /* ── Badge home live ─────────────────────────────────────── */
 function mcHomeBadgeHTML() {
   if (userRole !== 'admin' && userRole !== 'coord') return '';
-  const t = totals(allData);
+  const t    = totals(allData);
   const conf = getConfidenceLevel(t.vt);
   if (!conf.showProjection) {
     return `<button type="button" class="mc-home-badge inactive" onclick="showMonteCarlo()">
       🔮 ${conf.message}
     </button>`;
   }
-  const res = mcResult;
-  const p = res && res.active ? (res.pTraina * 100).toFixed(0) : '…';
+  const res  = mcResult;
+  const p    = res && res.active ? (res.pTraina * 100).toFixed(0) : '…';
   const arrow = res && res.lead > 0 ? '↑' : res && res.lead < 0 ? '↓' : '→';
-  const name = res && res.pTraina >= 0.5 ? 'Traina' : 'Mangiapane';
-  const spin = mcComputing ? '<span class="mc-spin"></span>' : '';
+  const name  = res && res.pTraina >= 0.5 ? 'Traina' : 'Mangiapane';
+  const spin  = mcComputing ? '<span class="mc-spin"></span>' : '';
   return `<button type="button" class="mc-home-badge" onclick="showMonteCarlo()">
     ${spin} 🔮 Prob. ${name}: ${p}% <span class="mc-arr">${arrow}</span>
     <span style="opacity:.6;font-weight:400"> · ${fn(t.vt)} schede</span>
@@ -412,9 +381,9 @@ function mcRunCasinoAnimation() {
   for (let c = 0; c < 10; c++) {
     const div = document.createElement('div');
     div.className = 'mc-ball';
-    div.style.height = (20 + Math.random() * 70) + 'px';
-    div.style.animationDelay = (c * 0.05) + 's';
-    div.style.background = Math.random() > 0.5 ? '#B84020' : '#1B5299';
+    div.style.height          = (20 + Math.random() * 70) + 'px';
+    div.style.animationDelay  = (c * 0.05) + 's';
+    div.style.background      = Math.random() > 0.5 ? '#B84020' : '#1B5299';
     box.appendChild(div);
   }
 }
@@ -433,13 +402,13 @@ function showMonteCarlo() {
 }
 
 function renMonteCarlo(spinnerOnly) {
-  const res = mcResult || runMonteCarlo();
-  const conf = res.conf || getConfidenceLevel(totals(allData).vt);
-  const t = totals(allData);
-  const mangName = C1.nome.split(' ').slice(-1)[0];
+  const res       = mcResult || runMonteCarlo();
+  const conf      = res.conf || getConfidenceLevel(totals(allData).vt);
+  const t         = totals(allData);
+  const mangName  = C1.nome.split(' ').slice(-1)[0];
   const trainName = C2.nome.split(' ').slice(-1)[0];
 
-  $('root').className = 'mc-wrap wide';
+  $('root').className     = 'mc-wrap wide';
   $('root').style.maxWidth = '1100px';
 
   if (spinnerOnly) {
@@ -449,9 +418,9 @@ function renMonteCarlo(spinnerOnly) {
   }
 
   const pT = res.active ? res.pTraina * 100 : 0;
-  const pM = res.active ? res.pMang * 100 : 0;
+  const pM = res.active ? res.pMang   * 100 : 0;
   mcDisplayPct.traina = pT;
-  mcDisplayPct.mang = pM;
+  mcDisplayPct.mang   = pM;
 
   let alertHTML = '';
   if (conf.message) {
@@ -472,12 +441,11 @@ function renMonteCarlo(spinnerOnly) {
     }
   }
 
-  const ciW = res.active ? (res.ciHigh - res.ciLow) : 0;
-  const ciLeft = res.active ? res.ciLow : 45;
-  const ciDot = res.active ? res.pctTrainaNow : 50;
+  const ciW    = res.active ? (res.ciHigh - res.ciLow)  : 0;
+  const ciLeft = res.active ? res.ciLow                 : 45;
+  const ciDot  = res.active ? res.pctTrainaNow           : 50;
 
-  const summary = res.active ? buildMcSummary(res, t) : conf.message;
-
+  const summary     = res.active ? buildMcSummary(res, t) : conf.message;
   const decisiveTxt = res.active
     ? `Sezione decisiva: <span class="mc-sez-decisiva">Sez. ${res.decisiveSez}</span> — in ${fn(res.decisiveCount)} simulazioni su ${fn(res.decisiveSimTotal)} ha influenzato l'esito`
     : '—';
@@ -486,13 +454,17 @@ function renMonteCarlo(spinnerOnly) {
     <div class="tb" style="border-color:rgba(255,255,255,.1);background:#0d1117;position:sticky;top:0;z-index:10">
       <div style="display:flex;align-items:center;gap:10px">
         <button class="btn" onclick="mcGoHome()" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)">← Torna</button>
-        <div><div class="tb-t" style="color:#fff">📊 Previsioni Monte Carlo</div>
-        <div class="tb-s" style="color:rgba(255,255,255,.4)">${COMUNE} · ${fn(t.vt)} / ~${fn(res.expectedTotal || Math.round(t.el * MC_AFFLUENZA))} schede previste</div></div>
+        <div>
+          <div class="tb-t" style="color:#fff">📊 Previsioni Monte Carlo</div>
+          <div class="tb-s" style="color:rgba(255,255,255,.4)">${COMUNE} · ${fn(t.vt)} / ~${fn(res.expectedTotal || Math.round(t.el * MC_AFFLUENZA))} schede previste</div>
+        </div>
       </div>
       <span class="badge ${mcComputing ? 'bwip' : 'bok'}">${mcComputing ? 'Calcolo…' : conf.label}</span>
     </div>
 
-    <div id="mc-spinner-slot">${mcComputing ? '<div class="mc-spinner"><span class="mc-spin"></span> 🔄 Aggiornamento previsioni… (' + (res.sims || MC_SIMS_FULL).toLocaleString('it-IT') + ' scenari)</div>' : ''}</div>
+    <div id="mc-spinner-slot">${mcComputing
+      ? `<div class="mc-spinner"><span class="mc-spin"></span> 🔄 Aggiornamento previsioni… (${(res.sims || MC_SIMS_FULL).toLocaleString('it-IT')} scenari)</div>`
+      : ''}</div>
 
     ${alertHTML}
 
@@ -501,7 +473,9 @@ function renMonteCarlo(spinnerOnly) {
       <div class="mc-thermo">
         <div class="mc-bar-mang" id="mc-bar-mang" style="width:${pM}%">${pM > 12 ? mangName : ''}</div>
         <div class="mc-bar-train" id="mc-bar-train" style="width:${pT}%">${pT > 12 ? trainName : ''}</div>
-        <span class="mc-thermo-pct" id="mc-thermo-pct">${res.active ? (res.pTraina >= res.pMang ? trainName : mangName) + ' ' + Math.max(pT, pM).toFixed(1) + '%' : '—'}</span>
+        <span class="mc-thermo-pct" id="mc-thermo-pct">${res.active
+          ? (res.pTraina >= res.pMang ? trainName : mangName) + ' ' + Math.max(pT, pM).toFixed(1) + '%'
+          : '—'}</span>
       </div>
       <div class="mc-conf-wrap">
         <div class="mc-conf-lbl">
@@ -513,56 +487,59 @@ function renMonteCarlo(spinnerOnly) {
       ${certaintyHTML}
     </div>
 
-    <div class="mc-grid2" style="grid-template-columns: 1.5fr 1fr; gap: 15px;">
+    <div class="mc-grid2" style="grid-template-columns:1.5fr 1fr;gap:15px">
       <div class="mc-card">
         <span class="ct">Distribuzione Probabilistica (Bayes)</span>
         ${res.active ? `
-        <p style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px">
+        <p style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:12px">
           Margine di incertezza stimato: <strong style="color:#4ADE80">± ${((res.ciHigh - res.ciLow) / 2).toFixed(1)}%</strong>
         </p>
-        <div class="mc-ci-band" style="height:12px; background:rgba(255,255,255,0.05); border-radius:4px; margin-bottom:15px; position:relative;">
-          <div class="mc-ci-range" style="position:absolute; left:${ciLeft}%; width:${ciW}%; background:#4ADE80; opacity:0.3; height:100%; border-radius:4px"></div>
-          <div class="mc-ci-dot" style="position:absolute; left:${ciDot}%; background:#fff; width:3px; height:20px; top:-4px; border-radius:2px"></div>
+        <div class="mc-ci-band" style="height:12px;background:rgba(255,255,255,.05);border-radius:4px;margin-bottom:15px;position:relative">
+          <div class="mc-ci-range" style="position:absolute;left:${ciLeft}%;width:${ciW}%;background:#4ADE80;opacity:.3;height:100%;border-radius:4px"></div>
+          <div class="mc-ci-dot"   style="position:absolute;left:${ciDot}%;background:#fff;width:3px;height:20px;top:-4px;border-radius:2px"></div>
         </div>
-        <div style="display: flex; gap: 8px;">
-           <div class="mc-data-chip">
-              <span class="mc-data-lbl">Min (2.5%)</span>
-              <span class="mc-data-val">${res.ciLow.toFixed(1)}%</span>
-           </div>
-           <div class="mc-data-chip" style="border-color:rgba(74,222,128,0.4)">
-              <span class="mc-data-lbl">Mediana</span>
-              <span class="mc-data-val" style="color:#4ADE80">${res.ciMid.toFixed(1)}%</span>
-           </div>
-           <div class="mc-data-chip">
-              <span class="mc-data-lbl">Max (97.5%)</span>
-              <span class="mc-data-val">${res.ciHigh.toFixed(1)}%</span>
-           </div>
-        </div>
-        ` : '<p style="color:var(--tx3)">Dati insufficienti</p>'}
+        <div style="display:flex;gap:8px">
+          <div class="mc-data-chip">
+            <span class="mc-data-lbl">Min (2.5%)</span>
+            <span class="mc-data-val">${res.ciLow.toFixed(1)}%</span>
+          </div>
+          <div class="mc-data-chip" style="border-color:rgba(74,222,128,.4)">
+            <span class="mc-data-lbl">Mediana</span>
+            <span class="mc-data-val" style="color:#4ADE80">${res.ciMid.toFixed(1)}%</span>
+          </div>
+          <div class="mc-data-chip">
+            <span class="mc-data-lbl">Max (97.5%)</span>
+            <span class="mc-data-val">${res.ciHigh.toFixed(1)}%</span>
+          </div>
+        </div>` : '<p style="color:var(--tx3)">Dati insufficienti</p>'}
       </div>
 
       <div class="mc-card">
         <span class="ct">Parametri di Calcolo</span>
         <div style="margin-top:10px">
-          <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05)">
-            <span style="color:rgba(255,255,255,0.5); font-size:12px">Voti totali stimati</span>
-            <span style="color:#fff; font-family:monospace">${fn(res.expectedTotal)}</span>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+            <span style="color:rgba(255,255,255,.5);font-size:12px">Voti totali stimati</span>
+            <span style="color:#fff;font-family:monospace">${fn(res.expectedTotal)}</span>
           </div>
-          <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05)">
-            <span style="color:rgba(255,255,255,0.5); font-size:12px">Scenari vinti Traina</span>
-            <span style="color:var(--c2); font-family:monospace">${fn(res.winsTraina)}</span>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+            <span style="color:rgba(255,255,255,.5);font-size:12px">Scenari vinti Traina</span>
+            <span style="color:var(--c2);font-family:monospace">${fn(res.winsTraina)}</span>
           </div>
-          <div style="display:flex; justify-content:space-between; padding:6px 0">
-            <span style="color:rgba(255,255,255,0.5); font-size:12px">Affidabilità Modello</span>
-            <span style="color:#4ADE80; font-weight:700">${conf.confidence}%</span>
+          <div style="display:flex;justify-content:space-between;padding:6px 0">
+            <span style="color:rgba(255,255,255,.5);font-size:12px">Affidabilità Modello</span>
+            <span style="color:#4ADE80;font-weight:700">${conf.confidence}%</span>
           </div>
         </div>
       </div>
     </div>
+
     <div class="mc-card" style="margin-bottom:10px">
       <span class="ct">Simulazione in corso</span>
       <div class="mc-casino" id="mc-casino"></div>
-      <button class="btn bp" style="width:100%" onclick="mcResult=runMonteCarlo();mcPushHistory(mcResult);mcRunCasinoAnimation();animateMcPct(mcResult);renMonteCarlo(false)">🎲 Rilancia ${(res.sims || 10000).toLocaleString('it-IT')} scenari</button>
+      <button class="btn bp" style="width:100%"
+        onclick="mcResult=runMonteCarlo();mcPushHistory(mcResult);mcRunCasinoAnimation();animateMcPct(mcResult);renMonteCarlo(false)">
+        🎲 Rilancia ${(res.sims || 10000).toLocaleString('it-IT')} scenari
+      </button>
     </div>
 
     <div class="mc-card" style="margin-bottom:10px">
@@ -571,25 +548,19 @@ function renMonteCarlo(spinnerOnly) {
     </div>
 
     <div class="mc-summary">${summary}</div>
-  `; // Chiude l'innerHTML
+  `;
 
   mcRunCasinoAnimation();
   initMcChart();
-} // Chiude la funzione renMonteCarlo
-
-
-    
-  mcRunCasinoAnimation();
-  initMcChart();
-}
+}   /* ← fine renMonteCarlo */
 
 function buildMcSummary(res, t) {
   const trainName = C2.nome.split(' ').slice(-1)[0];
-  const mangName = C1.nome.split(' ').slice(-1)[0];
-  const ahead = res.pctTrainaNow >= 50 ? trainName : mangName;
-  const behind = res.pctTrainaNow >= 50 ? mangName : trainName;
+  const mangName  = C1.nome.split(' ').slice(-1)[0];
+  const ahead  = res.pctTrainaNow >= 50 ? trainName : mangName;
+  const behind = res.pctTrainaNow >= 50 ? mangName  : trainName;
   const margin = Math.abs(res.pctTrainaNow - 50).toFixed(1);
-  const prob = (Math.max(res.pTraina, res.pMang) * 100).toFixed(0);
+  const prob   = (Math.max(res.pTraina, res.pMang) * 100).toFixed(0);
   return `Con <strong>${fn(res.vt)}</strong> schede scrutinate su ~<strong>${fn(res.expectedTotal)}</strong> previste, ` +
     `<strong>${ahead}</strong> è avanti con il <strong>${Math.max(res.pctTrainaNow, 100 - res.pctTrainaNow).toFixed(1)}%</strong> (+${margin}% su ${behind}). ` +
     `La probabilità di vittoria è <strong>${prob}%</strong>. La sezione decisiva è la <strong>n.${res.decisiveSez}</strong>.`;
@@ -600,7 +571,7 @@ function initMcChart() {
   if (!ctx || typeof Chart === 'undefined') return;
   if (mcChart) mcChart.destroy();
   const labels = mcHistory.map(h => fn(h.vt));
-  const data = mcHistory.map(h => h.pTraina);
+  const data   = mcHistory.map(h => h.pTraina);
   mcChart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -637,16 +608,20 @@ function mcInjectHomeUI() {
   if (userRole !== 'admin' && userRole !== 'coord') return;
   const dash = document.querySelector('.btn.bp.bw.blg');
   if (!dash || !dash.parentNode) return;
+
   if (!$('mc-nav-btn')) {
     const btn = document.createElement('button');
-    btn.id = 'mc-nav-btn';
-    btn.type = 'button';
+    btn.id        = 'mc-nav-btn';
+    btn.type      = 'button';
     btn.className = 'btn bw';
-    btn.style.cssText = 'margin-bottom:8px;padding:14px;font-size:15px;font-weight:700;width:100%;background:linear-gradient(135deg,#1a2332 0%,#0d1117 100%);color:#fff;border:1px solid rgba(255,255,255,.12);letter-spacing:.2px';
+    btn.style.cssText = 'margin-bottom:8px;padding:14px;font-size:15px;font-weight:700;width:100%;'
+      + 'background:linear-gradient(135deg,#1a2332 0%,#0d1117 100%);color:#fff;'
+      + 'border:1px solid rgba(255,255,255,.12);letter-spacing:.2px';
     btn.textContent = '📊 Previsioni Monte Carlo';
     btn.onclick = () => showMonteCarlo();
     dash.insertAdjacentElement('afterend', btn);
   }
+
   if (!$('mc-home-slot')) {
     const slot = document.createElement('div');
     slot.id = 'mc-home-slot';
@@ -654,12 +629,29 @@ function mcInjectHomeUI() {
     if (nav) nav.insertAdjacentElement('afterend', slot);
     else dash.parentNode.insertBefore(slot, dash.nextSibling);
   }
+
   updateMcHomeBadge();
+}
+
+/* ── BUG FIX #3: sottoscrizione Firestore robusta ───────────
+   Il modulo Firebase spara 'fb-ready' prima che questo script
+   possa registrare il listener (race condition). Si controlla
+   subito se window.fb esiste già; se no, si aspetta l'evento. */
+function mcSubscribeFirestore() {
+  if (!window.fb) return;
+  window.fb.onSnapshot(
+    window.fb.collection(window.fb.db, 'sezioni'),
+    () => {
+      scheduleMcUpdate();
+      if (view === 'montecarlo') mcResult = null;
+    }
+  );
 }
 
 function monteCarloInstall() {
   mcLoadHistory();
 
+  /* Wrapping showHome per iniettare il bottone MC */
   const origShowHome = window.showHome;
   if (origShowHome) {
     window.showHome = function () {
@@ -669,24 +661,23 @@ function monteCarloInstall() {
     };
   }
 
-  window.addEventListener('fb-ready', () => {
-    if (!window.fb) return;
-    window.fb.onSnapshot(window.fb.collection(window.fb.db, 'sezioni'), () => {
-      scheduleMcUpdate();
-      if (view === 'montecarlo') {
-        mcResult = null;
-      }
-    });
-  });
+  /* BUG FIX #3: controlla subito; ascolta l'evento solo se Firebase
+     non è ancora pronto (non dovrebbe più accadere, ma copriamo entrambi i casi) */
+  if (window.fb) {
+    mcSubscribeFirestore();
+  } else {
+    window.addEventListener('fb-ready', mcSubscribeFirestore, { once: true });
+  }
 
-  window.showMonteCarlo = showMonteCarlo;
-  window.renMonteCarlo = renMonteCarlo;
-  window.runMonteCarlo = runMonteCarlo;
+  /* Espone le API globali */
+  window.showMonteCarlo          = showMonteCarlo;
+  window.renMonteCarlo           = renMonteCarlo;
+  window.runMonteCarlo           = runMonteCarlo;
   window.calculateTrendsBySezione = calculateTrendsBySezione;
-  window.getConfidenceLevel = getConfidenceLevel;
-  window.scheduleMcUpdate = scheduleMcUpdate;
-  window.mcGoHome = mcGoHome;
-  window.mcRunCasinoAnimation = mcRunCasinoAnimation;
+  window.getConfidenceLevel      = getConfidenceLevel;
+  window.scheduleMcUpdate        = scheduleMcUpdate;
+  window.mcGoHome                = mcGoHome;
+  window.mcRunCasinoAnimation    = mcRunCasinoAnimation;
 
   if (userRole === 'admin' || userRole === 'coord') {
     setTimeout(scheduleMcUpdate, 800);
