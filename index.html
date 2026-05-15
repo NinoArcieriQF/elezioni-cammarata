@@ -3089,43 +3089,42 @@ async function resetAll(){
   alert('Dati azzerati. Un backup è disponibile nella sezione Backup per il ripristino.');
   goHome();
 }
-
-/* ── FUNZIONE DI STRESS TEST PER MONTE CARLO ── */
-window.testMultiAdd = function(count) {
+/* ── FUNZIONE DI STRESS TEST PER MONTE CARLO (Versione Sicura) ── */
+window.testMultiAdd = async function(count) {
   count = parseInt(count);
   if (isNaN(count) || count <= 0) {
     alert("Inserisci un numero valido!");
     return;
   }
 
-  // selSez è la variabile globale che indica la sezione aperta
   if (typeof selSez === 'undefined' || !selSez) {
-    alert("Errore: nessuna sezione selezionata!");
+    alert("Errore: Entra prima in una sezione!");
     return;
   }
 
   if (!confirm(`Inserire ${count} schede simulate nella Sezione ${selSez}?`)) return;
 
   let added = 0;
+  console.log(`[TEST] Avvio inserimento di ${count} schede...`);
+
   for (let i = 0; i < count; i++) {
-    // Simuliamo un trend: 55% Traina (v2), 45% Mangiapane (v1)
+    // Trend: 55% Traina (v2), 45% Mangiapane (v1)
     const v2 = Math.random() > 0.45 ? 1 : 0;
     const v1 = v2 === 1 ? 0 : 1;
 
-    // Chiama la tua funzione originale doSaveBallot(v1, v2, bianche, prefs)
     if (typeof window.doSaveBallot === 'function') {
-      window.doSaveBallot(v1, v2, 0, []); 
+      await window.doSaveBallot(v1, v2, 0, []); 
       added++;
+      // Un piccolo respiro per evitare di bloccare il browser
+      if (i % 10 === 0) await new Promise(r => setTimeout(r, 50));
     }
   }
 
-  console.log(`[TEST] Inviate ${added} schede al server.`);
   alert(`Operazione completata! ${added} schede aggiunte alla sezione ${selSez}.`);
-  
   if (typeof window.goHome === 'function') window.goHome();
 };
 
-// Espone funzioni globali per onclick inline
+// --- ESPOSIZIONE FUNZIONI GLOBALI (Assicurati che testMultiAdd sia qui) ---
 window.selRole=selRole;window.selLoginSez=selLoginSez;window.checkPw=checkPw;
 window.goHome=goHome;window.goSez=goSez;window.showDash=showDash;window.showAdmin=showAdmin;
 window.showBallot=showBallot;window.backToSez=backToSez;window.selTipo=selTipo;window.selSindaco=selSindaco;
@@ -3142,9 +3141,9 @@ window.setTicketTab=setTicketTab;window.showPublicDash=showPublicDash;
 window.showRappMenu=showRappMenu;window.showSezStats=showSezStats;
 window.showAnalytics=showAnalytics;window.setAnalyticsTab=setAnalyticsTab;
 window.setAnalyticsLista=setAnalyticsLista;window.exportAnalyticsCSV=exportAnalyticsCSV;
-// Aggiungiamo anche questa per sicurezza
 window.testMultiAdd=testMultiAdd; 
 </script>
+
 <script src="montecarlo.js"></script>
 </body>
 </html>
