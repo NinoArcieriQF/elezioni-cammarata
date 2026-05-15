@@ -338,6 +338,8 @@ function applyMcThermoDOM() {
   const barM   = $('mc-bar-mang');
   const barT   = $('mc-bar-train');
   const pctEl  = $('mc-thermo-pct');
+  const legM   = document.querySelector('.mc-leg-m');
+  const legT   = document.querySelector('.mc-leg-t');
   if (barM)  barM.style.width  = mcDisplayPct.mang   + '%';
   if (barT)  barT.style.width  = mcDisplayPct.traina + '%';
   if (pctEl) {
@@ -345,6 +347,8 @@ function applyMcThermoDOM() {
     const p    = Math.max(mcDisplayPct.traina, mcDisplayPct.mang).toFixed(1);
     pctEl.textContent = lead + ' ' + p + '%';
   }
+  if (legM) legM.innerHTML = `▮ ${C1.nome.split(' ').slice(-1)[0]} &nbsp;${mcDisplayPct.mang.toFixed(1)}%`;
+  if (legT) legT.innerHTML = `${mcDisplayPct.traina.toFixed(1)}% &nbsp;${C2.nome.split(' ').slice(-1)[0]} ▮`;
 }
 
 /* ── Badge home live ─────────────────────────────────────── */
@@ -471,11 +475,15 @@ function renMonteCarlo(spinnerOnly) {
     <div class="mc-hero">
       <h2>Probabilità vittoria sindaco</h2>
       <div class="mc-thermo">
-        <div class="mc-bar-mang" id="mc-bar-mang" style="width:${pM}%">${pM > 12 ? mangName : ''}</div>
-        <div class="mc-bar-train" id="mc-bar-train" style="width:${pT}%">${pT > 12 ? trainName : ''}</div>
+        <div class="mc-bar-mang"  id="mc-bar-mang"  style="width:${pM}%"></div>
+        <div class="mc-bar-train" id="mc-bar-train" style="width:${pT}%"></div>
         <span class="mc-thermo-pct" id="mc-thermo-pct">${res.active
           ? (res.pTraina >= res.pMang ? trainName : mangName) + ' ' + Math.max(pT, pM).toFixed(1) + '%'
           : '—'}</span>
+      </div>
+      <div class="mc-thermo-legend">
+        <span class="mc-leg-m">▮ ${mangName} &nbsp;${pM.toFixed(1)}%</span>
+        <span class="mc-leg-t">${pT.toFixed(1)}% &nbsp;${trainName} ▮</span>
       </div>
       <div class="mc-conf-wrap">
         <div class="mc-conf-lbl">
@@ -491,44 +499,48 @@ function renMonteCarlo(spinnerOnly) {
       <div class="mc-card">
         <span class="ct">Distribuzione Probabilistica (Bayes)</span>
         ${res.active ? `
-        <p style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:12px">
-          Margine di incertezza stimato: <strong style="color:#4ADE80">± ${((res.ciHigh - res.ciLow) / 2).toFixed(1)}%</strong>
-        </p>
-        <div class="mc-ci-band" style="height:12px;background:rgba(255,255,255,.05);border-radius:4px;margin-bottom:15px;position:relative">
-          <div class="mc-ci-range" style="position:absolute;left:${ciLeft}%;width:${ciW}%;background:#4ADE80;opacity:.3;height:100%;border-radius:4px"></div>
-          <div class="mc-ci-dot"   style="position:absolute;left:${ciDot}%;background:#fff;width:3px;height:20px;top:-4px;border-radius:2px"></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+          <span style="font-size:12px;color:rgba(255,255,255,.5)">Intervallo di confidenza 95%</span>
+          <strong style="color:#4ADE80;font-family:'DM Mono',monospace">± ${((res.ciHigh - res.ciLow) / 2).toFixed(1)}%</strong>
+        </div>
+        <div class="mc-ci-band">
+          <div style="position:absolute;left:${ciLeft}%;width:${ciW}%;background:#4ADE80;opacity:.25;height:100%;border-radius:5px"></div>
+          <div style="position:absolute;left:${ciDot}%;transform:translateX(-50%);background:#fff;width:2px;height:18px;top:-4px;border-radius:2px;box-shadow:0 0 6px rgba(255,255,255,.5)"></div>
         </div>
         <div style="display:flex;gap:8px">
           <div class="mc-data-chip">
-            <span class="mc-data-lbl">Min (2.5%)</span>
             <span class="mc-data-val">${res.ciLow.toFixed(1)}%</span>
+            <span class="mc-data-lbl">Minimo (2.5%)</span>
           </div>
-          <div class="mc-data-chip" style="border-color:rgba(74,222,128,.4)">
-            <span class="mc-data-lbl">Mediana</span>
+          <div class="mc-data-chip accent">
             <span class="mc-data-val" style="color:#4ADE80">${res.ciMid.toFixed(1)}%</span>
+            <span class="mc-data-lbl">Mediana</span>
           </div>
           <div class="mc-data-chip">
-            <span class="mc-data-lbl">Max (97.5%)</span>
             <span class="mc-data-val">${res.ciHigh.toFixed(1)}%</span>
+            <span class="mc-data-lbl">Massimo (97.5%)</span>
           </div>
-        </div>` : '<p style="color:var(--tx3)">Dati insufficienti</p>'}
+        </div>
+        ` : '<p style="color:rgba(255,255,255,.4);font-size:13px;margin-top:8px">Dati insufficienti per la distribuzione</p>'}
       </div>
 
       <div class="mc-card">
         <span class="ct">Parametri di Calcolo</span>
-        <div style="margin-top:10px">
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">
-            <span style="color:rgba(255,255,255,.5);font-size:12px">Voti totali stimati</span>
-            <span style="color:#fff;font-family:monospace">${fn(res.expectedTotal)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)">
-            <span style="color:rgba(255,255,255,.5);font-size:12px">Scenari vinti Traina</span>
-            <span style="color:var(--c2);font-family:monospace">${fn(res.winsTraina)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:6px 0">
-            <span style="color:rgba(255,255,255,.5);font-size:12px">Affidabilità Modello</span>
-            <span style="color:#4ADE80;font-weight:700">${conf.confidence}%</span>
-          </div>
+        <div class="mc-param-row">
+          <span class="mc-param-lbl">Voti totali stimati</span>
+          <span class="mc-param-val">${fn(res.expectedTotal)}</span>
+        </div>
+        <div class="mc-param-row">
+          <span class="mc-param-lbl">Scenari Traina vince</span>
+          <span class="mc-param-val" style="color:#e87a5a">${fn(res.winsTraina)}</span>
+        </div>
+        <div class="mc-param-row">
+          <span class="mc-param-lbl">Scenari vinti Mang.</span>
+          <span class="mc-param-val" style="color:#5a9fd4">${fn(res.winsMang)}</span>
+        </div>
+        <div class="mc-param-row">
+          <span class="mc-param-lbl">Affidabilità modello</span>
+          <span class="mc-param-val" style="color:#4ADE80">${conf.confidence}%</span>
         </div>
       </div>
     </div>
