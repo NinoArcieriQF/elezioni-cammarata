@@ -1973,50 +1973,97 @@ function startClock(){clearInterval(clockI);const f=()=>{const e=$('live-clk');i
 ═══════════════════════════════════════════════════════════ */
 
 
-/* ══ DASHBOARD PUBBLICA — Desktop Full Screen 2 Schede ═════
-   Maxi-schermo · Tab 1: Sindaco+Liste · Tab 2: Consiglieri
+/* ══ DASHBOARD PUBBLICA — Desktop Full Screen ══════════════
+   Tab 1: Sindaco & Liste · Tab 2: Preferenze × Sezione
+   Maxi-schermo TV — nessun scroll, full 100vw × 100vh
 ═══════════════════════════════════════════════════════════ */
 
-const PD = {
+const PD={
   CO1:'#1E3A8A',CA1:'#2563EB',CL1:'#EFF6FF',
   CO2:'#991B1B',CA2:'#DC2626',CL2:'#FFF1F2',
-  MU:'#64748B',BD:'#E2E8F0',GN:'#059669',AM:'#D97706'
+  MU:'#64748B',GN:'#059669',AM:'#D97706'
 };
 
 function pdSetTab(n){
-  const t1=$('pd-tab1'),t2=$('pd-tab2');
-  const b1=$('pd-tab-btn1'),b2=$('pd-tab-btn2');
-  if(!t1||!t2)return;
-  t1.style.display=n===1?'grid':'none';
-  t2.style.display=n===2?'grid':'none';
-  if(b1){b1.style.background=n===1?'rgba(255,255,255,.1)':'transparent';b1.style.color=n===1?'#fff':'rgba(255,255,255,.45)';b1.style.borderBottom=n===1?'3px solid #60A5FA':'3px solid transparent';}
-  if(b2){b2.style.background=n===2?'rgba(255,255,255,.1)':'transparent';b2.style.color=n===2?'#fff':'rgba(255,255,255,.45)';b2.style.borderBottom=n===2?`3px solid ${PD.CA2}`:'3px solid transparent';}
+  ['1','2'].forEach(k=>{
+    const t=$('pd-tab'+k),b=$('pd-tab-btn'+k);
+    if(t)t.style.display=k===String(n)?'grid':'none';
+    if(b){
+      const on=k===String(n);
+      b.style.background=on?'rgba(255,255,255,.09)':'transparent';
+      b.style.color=on?'#fff':'rgba(255,255,255,.4)';
+      b.style.borderBottom=on?`3px solid ${n===1?'#60A5FA':PD.CA2}`:'3px solid transparent';
+    }
+  });
 }
 window.pdSetTab=pdSetTab;
 
-function pdCandRowsFull(cls,accentCol,seggi){
-  if(!cls||!cls.length)return'<div style="color:#94A3B8;font-size:14px;padding:16px">In attesa…</div>';
-  const mx=Math.max(1,cls[0]?cls[0].voti||1:1);
-  return cls.slice(0,12).map((c,i)=>{
-    const bw=mx>0?Math.round(c.voti/mx*100):0;
-    const el=seggi!==null&&i<seggi;
-    const gB=c.genere==='F'
-      ?`<span style="font-size:10px;font-weight:800;background:#FCE7F3;color:#9D174D;padding:2px 7px;border-radius:4px;flex-shrink:0">F</span>`
-      :`<span style="font-size:10px;font-weight:800;background:#EFF6FF;color:#1E3A8A;padding:2px 7px;border-radius:4px;flex-shrink:0">M</span>`;
-    const eB=el
-      ?`<span style="font-size:9px;font-weight:800;background:${accentCol}18;color:${accentCol};padding:2px 8px;border-radius:4px;border:1px solid ${accentCol}35;flex-shrink:0">✓ ELETTO</span>`
-      :`<span style="font-size:10px;color:#CBD5E1;flex-shrink:0">—</span>`;
-    return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:5px;background:${el?accentCol+'08':'transparent'};border:1px solid ${el?accentCol+'25':'#F1F5F9'}">
-      <span style="min-width:22px;font-size:13px;font-weight:800;color:${el?accentCol:'#CBD5E1'};font-family:'DM Mono',monospace">${i+1}</span>
-      ${gB}
-      <span style="flex:1;font-size:13px;font-weight:${el?700:500};color:${el?'#1E293B':'#64748B'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</span>
-      <div style="width:70px;height:5px;background:#F1F5F9;border-radius:3px;overflow:hidden;flex-shrink:0">
-        <div style="height:100%;width:${bw}%;background:${accentCol};border-radius:3px"></div>
-      </div>
-      <span style="min-width:36px;text-align:right;font-size:14px;font-weight:800;color:${el?accentCol:'#94A3B8'};font-family:'DM Mono',monospace">${fn(c.voti)}</span>
-      ${eB}
-    </div>`;
+/* Costruisce classifica con indice originale del candidato */
+function pdRank(listIdx,t){
+  const pk=listIdx===0?'p1':'p2';
+  return(CANDS[listIdx]||[]).map((c,j)=>({
+    nome:c.nome,genere:c.genere||'M',j,
+    tot:num((t[pk]||{})[j])||0
+  })).sort((a,b)=>b.tot-a.tot);
+}
+
+function pdGenBadge(g){
+  return g==='F'
+    ?`<span style="font-size:10px;font-weight:800;background:#FCE7F3;color:#9D174D;padding:1px 6px;border-radius:3px;flex-shrink:0">F</span>`
+    :`<span style="font-size:10px;font-weight:800;background:#EFF6FF;color:#1E3A8A;padding:1px 6px;border-radius:3px;flex-shrink:0">M</span>`;
+}
+
+/* Tabella candidati × sezioni — cuore del Tab 2 */
+function pdCrossTable(listIdx,ranking,accentCol,seggi){
+  const pk=listIdx===0?'p1':'p2';
+  const thS='padding:8px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #E2E8F0;background:#F8FAFC;white-space:nowrap;';
+
+  /* Header: Sez.1…N con stato scrutinio */
+  const sezTh=Array.from({length:N},(_,i)=>{
+    const s=allData[i+1]||defSez();
+    const col=s.done?accentCol:'#CBD5E1';
+    const ico=s.done?'✓ ':'';
+    return `<th style="${thS}text-align:right;min-width:46px;color:${col}">${ico}S${i+1}</th>`;
   }).join('');
+
+  const rows=ranking.map((c,rank)=>{
+    const isEl=seggi!==null&&rank<seggi;
+    const rowBg=isEl?accentCol+'08':'transparent';
+    const bdrL=isEl?`border-left:3px solid ${accentCol}`:'border-left:3px solid transparent';
+
+    const sezCells=Array.from({length:N},(_,i)=>{
+      const sez=allData[i+1]||defSez();
+      const v=num((sez[pk]||{})[c.j]);
+      const bg=sez.done?(v>0?accentCol+'12':'#F9FAFB'):'transparent';
+      const col=v>0?accentCol:(sez.done?'#CBD5E1':'#E5E7EB');
+      return `<td style="padding:8px 5px;text-align:right;font-family:'DM Mono',monospace;font-size:15px;font-weight:${v>0?800:400};color:${col};background:${bg};transition:background .6s,color .6s">${v>0?v:'·'}</td>`;
+    }).join('');
+
+    const elBadge=isEl
+      ?`<span style="font-size:9px;font-weight:800;background:${accentCol}15;color:${accentCol};padding:2px 9px;border-radius:4px;border:1px solid ${accentCol}30;white-space:nowrap">✓ ELETTO</span>`
+      :`<span style="color:#E2E8F0;font-size:13px">—</span>`;
+
+    return`<tr style="border-bottom:1px solid #F1F5F9;background:${rowBg};${bdrL}">
+      <td style="padding:8px 8px;text-align:center;font-size:14px;font-weight:900;color:${isEl?accentCol:'#CBD5E1'};font-family:'DM Mono',monospace">${rank+1}</td>
+      <td style="padding:8px 4px">${pdGenBadge(c.genere)}</td>
+      <td style="padding:8px 10px;font-size:13px;font-weight:${isEl?700:500};color:${isEl?'#1E293B':'#64748B'};white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${c.nome}</td>
+      ${sezCells}
+      <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:17px;font-weight:900;color:${isEl?accentCol:'#94A3B8'}">${c.tot>0?c.tot:'—'}</td>
+      <td style="padding:8px 8px">${elBadge}</td>
+    </tr>`;
+  }).join('');
+
+  return`<table style="width:100%;border-collapse:collapse">
+    <thead><tr>
+      <th style="${thS}text-align:center;min-width:32px;color:#94A3B8">#</th>
+      <th style="${thS}min-width:24px"></th>
+      <th style="${thS}min-width:140px;color:#94A3B8">Candidato</th>
+      ${sezTh}
+      <th style="${thS}text-align:right;min-width:52px;color:#0F172A">TOT</th>
+      <th style="${thS}min-width:90px;color:#94A3B8">Stato</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
 }
 
 function pdMiniCouncil(proj){
@@ -2024,44 +2071,19 @@ function pdMiniCouncil(proj){
   const s1c=proj.seggiLista1Cons||0,s2c=proj.seggiLista2Cons||0;
   const dots=Array.from({length:12},(_,i)=>{
     const is1=i<s1c;
-    return`<div style="width:30px;height:30px;border-radius:50%;background:${is1?PD.CA1:PD.CA2};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;box-shadow:0 2px 6px ${is1?PD.CA1:PD.CA2}50">${is1?'M':'T'}</div>`;
+    return`<div style="width:28px;height:28px;border-radius:50%;background:${is1?PD.CA1:PD.CA2};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;box-shadow:0 2px 6px ${is1?PD.CA1:PD.CA2}50">${is1?'M':'T'}</div>`;
   }).join('');
   const sc=proj.sindacoVincIdx===0?PD.CA1:PD.CA2;
   const sl=proj.sindacoVincIdx===0?'M':'T';
-  return`<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:8px">
-    <div style="width:34px;height:34px;border-radius:50%;background:${sc};border:3px solid #fff;box-shadow:0 0 0 2px ${sc};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff">${sl}</div>
+  return`<div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-bottom:8px">
+    <div style="width:32px;height:32px;border-radius:50%;background:${sc};border:2px solid #fff;box-shadow:0 0 0 2px ${sc};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff">${sl}</div>
     ${dots}
   </div>
   <div style="display:flex;justify-content:space-around;font-size:13px;font-weight:800">
     <span style="color:${PD.CA1}">${listaNomi[0]}: ${proj.seggiTotali1||0}</span>
     <span style="color:${PD.CA2}">${listaNomi[1]}: ${proj.seggiTotali2||0}</span>
   </div>
-  ${proj.sindacoInMinoranza?`<div style="margin-top:7px;text-align:center;font-size:11px;font-weight:600;color:#92400E;background:#FEF3C7;padding:5px 8px;border-radius:6px;border:1px solid #FDE68A">⚠ Sindaco in minoranza nel consiglio</div>`:''}`;
-}
-
-function pdSezFull(){
-  return Array.from({length:N},(_,i)=>{
-    const s=allData[i+1]||defSez();const el=EL[i];
-    const af=el>0?(num(s.votanti)/el*100).toFixed(1):'—';
-    const tv=num(s.vc1)+num(s.vc2);
-    const p1=tv>0?(num(s.vc1)/tv*100).toFixed(1):'—';
-    const p2=tv>0?(num(s.vc2)/tv*100).toFixed(1):'—';
-    const ldr=tv>0?(num(s.vc1)>=num(s.vc2)?PD.CA1:PD.CA2):'#E2E8F0';
-    const bg=s.done?'#F0FDF4':'transparent';
-    const st=s.done?`<span style="color:${PD.GN};font-weight:800">✓</span>`:s.upd?`<span style="color:${PD.AM}">…</span>`:`<span style="color:#CBD5E1">○</span>`;
-    return`<tr style="border-bottom:1px solid #F1F5F9;background:${bg}">
-      <td style="padding:10px 12px;font-size:20px;font-weight:900;font-family:'DM Mono',monospace;color:#0F172A;border-left:4px solid ${ldr}">${i+1}</td>
-      <td style="padding:10px 8px;font-size:13px;color:#475569">${fn(s.votanti)}<br><span style="font-size:11px;color:#94A3B8">${fn(el)} el.</span></td>
-      <td style="padding:10px 8px;font-size:14px;font-weight:700;color:${PD.GN}">${af!=='—'?af+'%':'—'}</td>
-      <td style="padding:10px 8px;font-family:'DM Mono',monospace;font-size:16px;font-weight:800;color:${PD.CA1}">${fn(s.vc1)}</td>
-      <td style="padding:10px 4px;font-size:12px;color:#94A3B8">${p1!=='—'?p1+'%':'—'}</td>
-      <td style="padding:10px 8px;font-family:'DM Mono',monospace;font-size:16px;font-weight:800;color:${PD.CA2}">${fn(s.vc2)}</td>
-      <td style="padding:10px 4px;font-size:12px;color:#94A3B8">${p2!=='—'?p2+'%':'—'}</td>
-      <td style="padding:10px 8px;font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:${PD.CA1}">${fn(s.vl1)}</td>
-      <td style="padding:10px 8px;font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:${PD.CA2}">${fn(s.vl2)}</td>
-      <td style="padding:10px 8px;text-align:center">${st}</td>
-    </tr>`;
-  }).join('');
+  ${proj.sindacoInMinoranza?`<div style="margin-top:7px;text-align:center;font-size:11px;font-weight:600;color:#92400E;background:#FEF3C7;padding:5px 8px;border-radius:6px">⚠ Sindaco in minoranza</div>`:''}`;
 }
 
 function showPublicDash(){
@@ -2078,9 +2100,39 @@ function showPublicDash(){
   const ldr=tvS>0?(p1>=p2?C1.nome:C2.nome):null;
   const ldrC=tvS>0?(p1>=p2?PD.CA1:PD.CA2):PD.MU;
   const delta=tvS>0?fn(Math.abs(num(t.vc1)-num(t.vc2))):null;
-  const cls1=proj&&!proj.isPareggioSindaco&&!proj.isPareggioLista?proj.classifica1:(CANDS[0]||[]).map((c,j)=>({nome:c.nome,genere:c.genere,voti:t.p1[j]||0})).sort((a,b)=>b.voti-a.voti);
-  const cls2=proj&&!proj.isPareggioSindaco&&!proj.isPareggioLista?proj.classifica2:(CANDS[1]||[]).map((c,j)=>({nome:c.nome,genere:c.genere,voti:t.p2[j]||0})).sort((a,b)=>b.voti-a.voti);
+  const rk1=pdRank(0,t),rk2=pdRank(1,t);
   const sg1=proj?proj.seggiLista1Cons:null,sg2=proj?proj.seggiLista2Cons:null;
+
+  /* Macro per la card candidato — evita duplicazione HTML */
+  const candCard=(img,nome,lista,logoLista,ac,co,cl,idP,idV,idBar,barW,idPl,vl,idVl,idLbar,lbarW,isWin)=>`
+    <div style="background:#fff;border-radius:16px;padding:16px 20px;box-shadow:0 2px 12px rgba(0,0,0,.06);display:flex;flex-direction:column;align-items:center;overflow:hidden;min-height:0;border-top:5px solid ${ac}">
+      <div style="flex-shrink:0;height:28px;display:flex;align-items:center;justify-content:center;margin-bottom:10px">
+        ${isWin&&tvS>0?`<div style="font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px;background:${ac};color:#fff;padding:5px 22px;border-radius:999px;box-shadow:0 4px 14px ${ac}50">♛ In Vantaggio</div>`:'<div></div>'}
+      </div>
+      <img src="${img}" style="width:clamp(80px,7.5vw,130px);height:clamp(80px,7.5vw,130px);border-radius:50%;object-fit:cover;border:4px solid ${isWin&&tvS>0?ac:'#E2E8F0'};margin-bottom:10px;flex-shrink:0;box-shadow:${isWin&&tvS>0?`0 10px 36px ${ac}45`:'none'}">
+      <div style="font-size:clamp(14px,1.4vw,20px);font-weight:800;color:#0F172A;text-align:center;margin-bottom:6px;flex-shrink:0">${nome}</div>
+      <div style="display:inline-flex;align-items:center;gap:6px;padding:4px 13px;border-radius:999px;background:${cl};font-size:12px;font-weight:700;color:${co};margin-bottom:12px;flex-shrink:0">
+        <img src="${logoLista}" style="width:17px;height:17px;border-radius:50%;object-fit:cover">${lista}
+      </div>
+      <div id="${idP}" style="font-size:clamp(76px,9.5vw,126px);font-weight:900;font-family:'DM Mono',monospace;letter-spacing:-5px;line-height:1;color:${ac};flex-shrink:0">${tvS>0?(idP==='pd-p2'?p2:p1).toFixed(1)+'%':'—'}</div>
+      <div id="${idV}" style="font-size:clamp(12px,1.2vw,17px);font-weight:600;color:${PD.MU};margin:7px 0 12px;flex-shrink:0">${tvS>0?fn(idP==='pd-p2'?t.vc2:t.vc1)+' voti sindaco':'In attesa di dati…'}</div>
+      <div style="width:100%;height:9px;border-radius:5px;background:#F1F5F9;overflow:hidden;margin-bottom:12px;flex-shrink:0">
+        <div id="${idBar}" style="height:100%;width:${barW}%;background:linear-gradient(90deg,${co},${ac});border-radius:5px;transition:width 1.2s cubic-bezier(.34,1.56,.64,1)"></div>
+      </div>
+      <div style="width:100%;display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:12px;background:${cl};margin-top:auto;flex-shrink:0">
+        <img src="${logoLista}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;font-weight:700;color:${co};margin-bottom:3px">${lista}</div>
+          <div style="height:6px;background:rgba(255,255,255,.65);border-radius:3px;overflow:hidden">
+            <div id="${idLbar}" style="height:100%;background:${ac};border-radius:3px;width:${lbarW}%;transition:width .8s ease"></div>
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div id="${idPl}" style="font-size:clamp(17px,1.8vw,26px);font-weight:900;font-family:'DM Mono',monospace;color:${ac}">${tvL>0?vl.toFixed(1)+'%':'—'}</div>
+          <div id="${idVl}" style="font-size:11px;color:${PD.MU}">${fn(idP==='pd-p2'?t.vl2:t.vl1)} voti lista</div>
+        </div>
+      </div>
+    </div>`;
 
   $('root').className='';
   $('root').innerHTML=`
@@ -2088,207 +2140,139 @@ function showPublicDash(){
 *{box-sizing:border-box}
 body{margin:0;padding:0;overflow:hidden!important}
 #pds{width:100vw;height:100vh;display:flex;flex-direction:column;font-family:'DM Sans',system-ui,sans-serif;background:#F1F5F9;overflow:hidden}
-#pdh{flex-shrink:0;background:linear-gradient(135deg,#0F172A 0%,#1E3A8A 58%,#0F172A 100%);padding:11px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px}
-#pdpb{flex-shrink:0;height:5px;background:rgba(255,255,255,.1)}
+#pdh{flex-shrink:0;background:linear-gradient(135deg,#0F172A 0%,#1E3A8A 55%,#0F172A 100%);padding:11px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+#pdpb{flex-shrink:0;height:4px;background:rgba(255,255,255,.08)}
 #pdpbf{height:100%;background:linear-gradient(90deg,#60A5FA,#34D399);transition:width .8s ease;width:${progP.toFixed(1)}%}
 #pdtabs{flex-shrink:0;display:flex;background:#1E293B;border-bottom:1px solid rgba(255,255,255,.06)}
-.pdtb{flex:1;height:48px;border:none;cursor:pointer;font-size:15px;font-weight:700;letter-spacing:.2px;background:transparent;color:rgba(255,255,255,.45);border-bottom:3px solid transparent;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .2s;font-family:'DM Sans',system-ui,sans-serif}
-#pd-tab1{flex:1;display:grid;grid-template-columns:1fr 420px 1fr;gap:14px;padding:14px;overflow:hidden;min-height:0}
-#pd-tab2{flex:1;display:none;grid-template-columns:1fr 1fr 1.6fr;gap:14px;padding:14px;overflow:hidden;min-height:0}
-.pdc{background:#fff;border-radius:16px;padding:16px 20px;box-shadow:0 2px 12px rgba(0,0,0,.06);display:flex;flex-direction:column;overflow:hidden;min-height:0}
-.pdct{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94A3B8;margin-bottom:12px;flex-shrink:0}
-.pdsc{overflow-y:auto;flex:1;min-height:0}
-.pdsc::-webkit-scrollbar{width:4px}
+.pdtb{flex:1;height:46px;border:none;cursor:pointer;font-size:15px;font-weight:700;background:transparent;color:rgba(255,255,255,.4);border-bottom:3px solid transparent;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .2s;font-family:inherit}
+#pd-tab1{flex:1;display:grid;grid-template-columns:1fr 390px 1fr;gap:14px;padding:14px;overflow:hidden;min-height:0}
+#pd-tab2{flex:1;display:none;grid-template-columns:1fr 1fr;gap:14px;padding:14px;overflow:hidden;min-height:0}
+.pdc2{background:#fff;border-radius:16px;padding:16px 20px;box-shadow:0 2px 12px rgba(0,0,0,.06);display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.pdct{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94A3B8;margin-bottom:10px;flex-shrink:0}
+.pdsc{overflow:auto;flex:1;min-height:0}
+.pdsc::-webkit-scrollbar{width:4px;height:4px}
 .pdsc::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:2px}
 .pd-ld{width:9px;height:9px;border-radius:50%;background:#DC2626;animation:pdB 1.2s ease-in-out infinite;display:inline-block}
-@keyframes pdB{0%,100%{opacity:1}50%{opacity:.15}}
+@keyframes pdB{0%,100%{opacity:1}50%{opacity:.1}}
 </style>
 <div id="pds">
 
+  <!-- HEADER -->
   <div id="pdh">
-    <div style="display:flex;align-items:center;gap:12px;flex:1">
-      <img src="${IMG_LOGO_IC}" style="width:48px;height:48px;border-radius:50%;border:2.5px solid rgba(220,38,38,.45);object-fit:cover;flex-shrink:0" alt="">
-      <div>
-        <div style="font-size:14px;font-weight:800;color:${PD.CA2};letter-spacing:.2px">${listaNomi[1]}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,.38)">${C2.nome}</div>
+    <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
+      <img src="${IMG_LOGO_IC}" style="width:46px;height:46px;border-radius:50%;border:2px solid rgba(220,38,38,.4);object-fit:cover;flex-shrink:0">
+      <div style="min-width:0">
+        <div style="font-size:14px;font-weight:800;color:${PD.CA2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${listaNomi[1]}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${C2.nome}</div>
       </div>
     </div>
     <div style="text-align:center;flex:2">
       <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:3px;text-transform:uppercase;margin-bottom:2px">Elezioni Comunali · ${DATA_EL} · ${COMUNE}</div>
       <div style="font-size:clamp(26px,2.8vw,44px);font-weight:900;color:#fff;letter-spacing:-1.5px;line-height:1">Risultati in Diretta</div>
     </div>
-    <div style="display:flex;align-items:center;justify-content:flex-end;gap:18px;flex:1">
-      <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.28);border-radius:20px;padding:6px 16px;font-size:12px;font-weight:800;color:#FCA5A5;letter-spacing:1.5px;flex-shrink:0">
-        <span class="pd-ld"></span> LIVE <span id="pd-clk" style="font-weight:400;color:rgba(255,255,255,.38);letter-spacing:0;font-size:11px;margin-left:4px"></span>
+    <div style="display:flex;align-items:center;gap:14px;flex:1;justify-content:flex-end;min-width:0">
+      <div style="display:flex;align-items:center;gap:8px;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.28);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:800;color:#FCA5A5;letter-spacing:1.5px;flex-shrink:0">
+        <span class="pd-ld"></span> LIVE
+        <span id="pd-clk" style="font-weight:400;color:rgba(255,255,255,.35);letter-spacing:0;font-size:11px;margin-left:4px"></span>
       </div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <div style="text-align:right">
-          <div style="font-size:14px;font-weight:800;color:${PD.CA1};letter-spacing:.2px">${listaNomi[0]}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,.38)">${C1.nome}</div>
+      <div style="display:flex;align-items:center;gap:10px;min-width:0">
+        <div style="text-align:right;min-width:0">
+          <div style="font-size:14px;font-weight:800;color:${PD.CA1};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${listaNomi[0]}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${C1.nome}</div>
         </div>
-        <img src="${IMG_LOGO_CO}" style="width:48px;height:48px;border-radius:50%;border:2.5px solid rgba(37,99,235,.45);object-fit:cover;flex-shrink:0" alt="">
+        <img src="${IMG_LOGO_CO}" style="width:46px;height:46px;border-radius:50%;border:2px solid rgba(37,99,235,.4);object-fit:cover;flex-shrink:0">
       </div>
     </div>
   </div>
 
   <div id="pdpb"><div id="pdpbf"></div></div>
 
+  <!-- TABS -->
   <div id="pdtabs">
     <button class="pdtb" id="pd-tab-btn1" onclick="pdSetTab(1)" style="color:#fff;background:rgba(255,255,255,.08);border-bottom:3px solid #60A5FA">
       📊 &nbsp;Sindaco &amp; Liste
-      <span id="pd-tab1-sub" style="font-size:11px;font-weight:500;opacity:.65">${done}/${N} sez. · ${affP>0?affP.toFixed(1)+'%':'—'} affl.</span>
+      <span id="pd-t1sub" style="font-size:11px;font-weight:500;opacity:.6">${done}/${N} sez · ${affP>0?affP.toFixed(1):'—'}% affl.</span>
     </button>
     <button class="pdtb" id="pd-tab-btn2" onclick="pdSetTab(2)">
-      🏛 &nbsp;Consiglieri &amp; Sezioni
+      🏛 &nbsp;Preferenze Consiglieri · Sezione per Sezione
     </button>
   </div>
 
   <!-- ══ TAB 1 ══ -->
   <div id="pd-tab1">
+    ${candCard(IMG_TRAINA,C2.nome,listaNomi[1],IMG_LOGO_IC,PD.CA2,PD.CO2,PD.CL2,'pd-p2','pd-v2','pd-bar2',p2,'pd-pl2',pl2,'pd-vl2','pd-lbar2',pl2,p2>p1)}
 
-    <!-- TRAINA sinistra -->
-    <div class="pdc" style="align-items:center;border-top:5px solid ${PD.CA2}">
-      ${tvS>0&&p2>p1
-        ?`<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;background:${PD.CA2};color:#fff;padding:5px 20px;border-radius:999px;margin-bottom:10px;flex-shrink:0">♛ In Vantaggio</div>`
-        :`<div style="height:30px;flex-shrink:0"></div>`}
-      <img src="${IMG_TRAINA}" style="width:clamp(90px,8.5vw,140px);height:clamp(90px,8.5vw,140px);border-radius:50%;object-fit:cover;border:4px solid ${tvS>0&&p2>p1?PD.CA2:'#E2E8F0'};margin-bottom:10px;flex-shrink:0;box-shadow:${tvS>0&&p2>p1?`0 10px 36px ${PD.CA2}45`:'none'}" alt="">
-      <div style="font-size:clamp(15px,1.4vw,21px);font-weight:800;color:#0F172A;margin-bottom:6px;text-align:center;flex-shrink:0">${C2.nome}</div>
-      <div style="display:inline-flex;align-items:center;gap:6px;padding:4px 14px;border-radius:999px;background:${PD.CL2};font-size:12px;font-weight:700;color:${PD.CO2};margin-bottom:14px;flex-shrink:0">
-        <img src="${IMG_LOGO_IC}" style="width:18px;height:18px;border-radius:50%;object-fit:cover">${listaNomi[1]}
-      </div>
-      <div id="pd-p2" style="font-size:clamp(72px,8.5vw,120px);font-weight:900;font-family:'DM Mono',monospace;letter-spacing:-4px;line-height:1;color:${PD.CA2};flex-shrink:0">${tvS>0?p2.toFixed(1)+'%':'—'}</div>
-      <div id="pd-v2" style="font-size:clamp(13px,1.3vw,18px);font-weight:600;color:${PD.MU};margin:8px 0 14px;flex-shrink:0">${tvS>0?fn(t.vc2)+' voti sindaco':'In attesa…'}</div>
-      <div style="width:100%;height:10px;border-radius:5px;background:#F1F5F9;overflow:hidden;margin-bottom:14px;flex-shrink:0">
-        <div id="pd-bar2" style="height:100%;width:${p2}%;background:linear-gradient(90deg,${PD.CO2},${PD.CA2});border-radius:5px;transition:width 1.2s cubic-bezier(.34,1.56,.64,1)"></div>
-      </div>
-      <div style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:${PD.CL2};flex-shrink:0;margin-top:auto">
-        <img src="${IMG_LOGO_IC}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:11px;font-weight:700;color:${PD.CO2};margin-bottom:3px">${listaNomi[1]}</div>
-          <div style="height:7px;background:rgba(255,255,255,.65);border-radius:4px;overflow:hidden">
-            <div id="pd-lbar2" style="height:100%;background:${PD.CA2};border-radius:4px;width:${pl2}%;transition:width .8s ease"></div>
-          </div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div id="pd-pl2" style="font-size:clamp(18px,1.8vw,26px);font-weight:900;font-family:'DM Mono',monospace;color:${PD.CA2}">${tvL>0?pl2.toFixed(1)+'%':'—'}</div>
-          <div id="pd-vl2" style="font-size:11px;color:${PD.MU}">${fn(t.vl2)} voti lista</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- CENTER colonna -->
-    <div style="display:flex;flex-direction:column;gap:12px;overflow:hidden;min-height:0">
-
-      <!-- 4 chip stat -->
+    <!-- CENTER -->
+    <div style="display:flex;flex-direction:column;gap:12px;min-height:0;overflow:hidden">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex-shrink:0">
         ${[
-          ['Affluenza',`<div id="pd-aff" style="font-size:26px;font-weight:900;font-family:'DM Mono',monospace;color:#0F172A">${affP>0?affP.toFixed(1)+'%':'—'}</div><div id="pd-aff-sub" style="font-size:11px;color:#94A3B8;margin-top:2px">${fn(t.vt)} / ${fn(t.el)}</div>`],
-          ['Sezioni',`<div id="pd-sez-cnt" style="font-size:26px;font-weight:900;font-family:'DM Mono',monospace;color:#0F172A">${done} / ${N}</div><div style="font-size:11px;color:#94A3B8;margin-top:2px">${progP.toFixed(0)}% scrutinate</div>`],
-          ['Voti Sindaco',`<div id="pd-tvs" style="font-size:26px;font-weight:900;font-family:'DM Mono',monospace;color:#0F172A">${tvS>0?fn(tvS):'—'}</div><div id="pd-tvs-sub" style="font-size:11px;color:#94A3B8;margin-top:2px">b.${fn(t.bi)}·n.${fn(t.nu)}</div>`],
-          ['Voti Lista',`<div id="pd-tvl" style="font-size:26px;font-weight:900;font-family:'DM Mono',monospace;color:#0F172A">${tvL>0?fn(tvL):'—'}</div><div id="pd-tvl-sub" style="font-size:11px;color:#94A3B8;margin-top:2px">disgiunti ${fn(t.vd)}</div>`]
-        ].map(([l,v])=>`<div class="pdc" style="padding:12px 14px;text-align:center"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8;margin-bottom:3px">${l}</div>${v}</div>`).join('')}
+          ['Affluenza',`<div id="pd-aff" style="font-size:28px;font-weight:900;font-family:'DM Mono',monospace;color:#0F172A">${affP>0?affP.toFixed(1)+'%':'—'}</div><div id="pd-aff-sub" style="font-size:11px;color:#94A3B8;margin-top:1px">${fn(t.vt)}/${fn(t.el)}</div>`],
+          ['Sezioni',`<div id="pd-sez-cnt" style="font-size:28px;font-weight:900;font-family:'DM Mono',monospace;color:#0F172A">${done}/${N}</div><div style="font-size:11px;color:#94A3B8;margin-top:1px">${progP.toFixed(0)}% scr.</div>`],
+          ['Voti Sindaco',`<div id="pd-tvs" style="font-size:28px;font-weight:900;font-family:'DM Mono',monospace;color:#0F172A">${tvS>0?fn(tvS):'—'}</div><div id="pd-tvs-sub" style="font-size:11px;color:#94A3B8;margin-top:1px">b.${fn(t.bi)} n.${fn(t.nu)}</div>`],
+          ['Voti Lista',`<div id="pd-tvl" style="font-size:28px;font-weight:900;font-family:'DM Mono',monospace;color:#0F172A">${tvL>0?fn(tvL):'—'}</div><div id="pd-tvl-sub" style="font-size:11px;color:#94A3B8;margin-top:1px">dis. ${fn(t.vd)}</div>`]
+        ].map(([l,v])=>`<div style="background:#fff;border-radius:14px;padding:12px 14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.05)">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8;margin-bottom:3px">${l}</div>${v}</div>`).join('')}
       </div>
 
       <!-- Race bar -->
-      <div class="pdc" style="flex-shrink:0">
+      <div style="background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.05);flex-shrink:0">
         <div class="pdct">Gara alla soglia del 50%</div>
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-          <div><span style="font-size:13px;font-weight:700;color:${PD.CO2}">${C2.nome.split(' ').pop()}</span><span id="pd-r2" style="font-size:24px;font-weight:900;font-family:'DM Mono',monospace;color:${PD.CA2};margin-left:8px">${tvS>0?p2.toFixed(1)+'%':'—'}</span></div>
-          <div><span id="pd-r1" style="font-size:24px;font-weight:900;font-family:'DM Mono',monospace;color:${PD.CA1};margin-right:8px">${tvS>0?p1.toFixed(1)+'%':'—'}</span><span style="font-size:13px;font-weight:700;color:${PD.CO1}">${C1.nome.split(' ').pop()}</span></div>
+          <div><span style="font-size:13px;font-weight:700;color:${PD.CO2}">${C2.nome.split(' ').pop()}</span><span id="pd-r2" style="font-size:22px;font-weight:900;font-family:'DM Mono',monospace;color:${PD.CA2};margin-left:7px">${tvS>0?p2.toFixed(1)+'%':'—'}</span></div>
+          <div><span id="pd-r1" style="font-size:22px;font-weight:900;font-family:'DM Mono',monospace;color:${PD.CA1};margin-right:7px">${tvS>0?p1.toFixed(1)+'%':'—'}</span><span style="font-size:13px;font-weight:700;color:${PD.CO1}">${C1.nome.split(' ').pop()}</span></div>
         </div>
         <div style="position:relative;margin-bottom:10px">
-          <div style="height:48px;border-radius:12px;background:#F8FAFC;overflow:hidden;display:flex;border:1px solid #F1F5F9;position:relative">
+          <div style="height:46px;border-radius:11px;background:#F8FAFC;overflow:hidden;display:flex;border:1px solid #F1F5F9">
             <div id="pd-rb2" style="height:100%;background:linear-gradient(90deg,${PD.CO2},${PD.CA2});width:${p2}%;transition:width 1.2s cubic-bezier(.34,1.56,.64,1);flex-shrink:0"></div>
-            <div style="flex:1"></div>
+            <div style="flex:1;position:relative"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><div style="width:2px;height:100%;background:#CBD5E1"></div></div></div>
             <div id="pd-rb1" style="height:100%;background:linear-gradient(90deg,${PD.CA1},${PD.CO1});width:${p1}%;transition:width 1.2s cubic-bezier(.34,1.56,.64,1);flex-shrink:0"></div>
-            <div style="position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);width:2px;background:#CBD5E1;z-index:2"></div>
           </div>
-          <div style="position:absolute;bottom:calc(100%+5px);left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#94A3B8;background:#fff;padding:1px 6px;border-radius:3px;border:1px solid #E2E8F0;white-space:nowrap">50%</div>
+          <div style="text-align:center;margin-top:4px"><span style="font-size:9px;font-weight:700;color:#94A3B8;background:#fff;padding:1px 5px;border-radius:3px;border:1px solid #E2E8F0">← 50% →</span></div>
         </div>
         ${tvS>0?`<div style="text-align:center"><span id="pd-race-lbl" style="display:inline-block;font-size:13px;font-weight:800;padding:6px 18px;border-radius:999px;background:${ldrC}10;color:${ldrC};border:1.5px solid ${ldrC}28">${ldr} +${Math.abs(p1-p2).toFixed(1)}pp · distacco ${delta} voti</span></div>`:`<div style="text-align:center;color:#CBD5E1;font-size:12px">In attesa dati</div>`}
       </div>
 
-      <!-- Consiglio + delta -->
+      <!-- Consiglio + distacco -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0;overflow:hidden">
-        <div class="pdc" style="padding:14px">
+        <div style="background:#fff;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.05)">
           <div class="pdct">Proiezione Consiglio</div>
           <div id="pd-parl">${pdMiniCouncil(proj)}</div>
         </div>
-        <div class="pdc" style="padding:14px;align-items:center;justify-content:center;text-align:center;background:${tvS>0?ldrC+'07':'#fff'};border:${tvS>0?`2px solid ${ldrC}20`:'1px solid #E2E8F0'}">
-          ${tvS>0?`
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${ldrC}90;margin-bottom:6px">Distacco in voti</div>
-          <div id="pd-delta" style="font-size:clamp(32px,3.5vw,56px);font-weight:900;font-family:'DM Mono',monospace;letter-spacing:-2px;color:${ldrC};line-height:1">${delta}</div>
-          <div id="pd-ldr-badge" style="font-size:13px;color:${ldrC};margin-top:6px;font-weight:700">${ldr} conduce</div>
-          `:`<div style="color:#CBD5E1;font-size:13px">In attesa</div>`}
+        <div style="background:${tvS>0?ldrC+'08':'#fff'};border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.05);border:${tvS>0?`2px solid ${ldrC}20`:'1px solid #E2E8F0'};display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+          ${tvS>0?`<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${ldrC}90;margin-bottom:6px">Distacco</div>
+          <div id="pd-delta" style="font-size:clamp(32px,4vw,60px);font-weight:900;font-family:'DM Mono',monospace;letter-spacing:-2px;color:${ldrC};line-height:1">${delta}</div>
+          <div id="pd-ldr-badge" style="font-size:13px;color:${ldrC};margin-top:6px;font-weight:700">${ldr} conduce</div>`
+          :`<div style="color:#CBD5E1;font-size:13px">In attesa</div>`}
         </div>
       </div>
     </div>
 
-    <!-- MANGIAPANE destra -->
-    <div class="pdc" style="align-items:center;border-top:5px solid ${PD.CA1}">
-      ${tvS>0&&p1>p2
-        ?`<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;background:${PD.CA1};color:#fff;padding:5px 20px;border-radius:999px;margin-bottom:10px;flex-shrink:0">♛ In Vantaggio</div>`
-        :`<div style="height:30px;flex-shrink:0"></div>`}
-      <img src="${IMG_MANG}" style="width:clamp(90px,8.5vw,140px);height:clamp(90px,8.5vw,140px);border-radius:50%;object-fit:cover;border:4px solid ${tvS>0&&p1>p2?PD.CA1:'#E2E8F0'};margin-bottom:10px;flex-shrink:0;box-shadow:${tvS>0&&p1>p2?`0 10px 36px ${PD.CA1}45`:'none'}" alt="">
-      <div style="font-size:clamp(15px,1.4vw,21px);font-weight:800;color:#0F172A;margin-bottom:6px;text-align:center;flex-shrink:0">${C1.nome}</div>
-      <div style="display:inline-flex;align-items:center;gap:6px;padding:4px 14px;border-radius:999px;background:${PD.CL1};font-size:12px;font-weight:700;color:${PD.CO1};margin-bottom:14px;flex-shrink:0">
-        <img src="${IMG_LOGO_CO}" style="width:18px;height:18px;border-radius:50%;object-fit:cover">${listaNomi[0]}
-      </div>
-      <div id="pd-p1" style="font-size:clamp(72px,8.5vw,120px);font-weight:900;font-family:'DM Mono',monospace;letter-spacing:-4px;line-height:1;color:${PD.CA1};flex-shrink:0">${tvS>0?p1.toFixed(1)+'%':'—'}</div>
-      <div id="pd-v1" style="font-size:clamp(13px,1.3vw,18px);font-weight:600;color:${PD.MU};margin:8px 0 14px;flex-shrink:0">${tvS>0?fn(t.vc1)+' voti sindaco':'In attesa…'}</div>
-      <div style="width:100%;height:10px;border-radius:5px;background:#F1F5F9;overflow:hidden;margin-bottom:14px;flex-shrink:0">
-        <div id="pd-bar1" style="height:100%;width:${p1}%;background:linear-gradient(90deg,${PD.CO1},${PD.CA1});border-radius:5px;transition:width 1.2s cubic-bezier(.34,1.56,.64,1)"></div>
-      </div>
-      <div style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:${PD.CL1};flex-shrink:0;margin-top:auto">
-        <img src="${IMG_LOGO_CO}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:11px;font-weight:700;color:${PD.CO1};margin-bottom:3px">${listaNomi[0]}</div>
-          <div style="height:7px;background:rgba(255,255,255,.65);border-radius:4px;overflow:hidden">
-            <div id="pd-lbar1" style="height:100%;background:${PD.CA1};border-radius:4px;width:${pl1}%;transition:width .8s ease"></div>
-          </div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div id="pd-pl1" style="font-size:clamp(18px,1.8vw,26px);font-weight:900;font-family:'DM Mono',monospace;color:${PD.CA1}">${tvL>0?pl1.toFixed(1)+'%':'—'}</div>
-          <div id="pd-vl1" style="font-size:11px;color:${PD.MU}">${fn(t.vl1)} voti lista</div>
-        </div>
-      </div>
-    </div>
+    ${candCard(IMG_MANG,C1.nome,listaNomi[0],IMG_LOGO_CO,PD.CA1,PD.CO1,PD.CL1,'pd-p1','pd-v1','pd-bar1',p1,'pd-pl1',pl1,'pd-vl1','pd-lbar1',pl1,p1>p2)}
   </div>
 
   <!-- ══ TAB 2 ══ -->
   <div id="pd-tab2">
-    <div class="pdc">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-shrink:0">
-        <img src="${IMG_LOGO_IC}" style="width:30px;height:30px;border-radius:50%;object-fit:cover">
+    <div class="pdc2">
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;margin-bottom:10px">
+        <img src="${IMG_LOGO_IC}" style="width:28px;height:28px;border-radius:50%;object-fit:cover">
         <div style="flex:1">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8">${listaNomi[1]}</div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8">${listaNomi[1]} — Preferenze per Sezione</div>
           <div style="font-size:13px;font-weight:700;color:${PD.CA2}">${C2.nome}</div>
         </div>
-        ${sg2!==null?`<span style="font-size:12px;font-weight:800;padding:4px 12px;border-radius:999px;background:${PD.CA2}15;color:${PD.CA2};border:1px solid ${PD.CA2}30">${sg2} seggi cons.</span>`:''}
+        ${sg2!==null?`<span style="font-size:12px;font-weight:800;padding:4px 12px;border-radius:999px;background:${PD.CA2}15;color:${PD.CA2};border:1px solid ${PD.CA2}30;flex-shrink:0">${sg2} seggi cons.</span>`:''}
       </div>
-      <div class="pdsc" id="pd-pref2">${pdCandRowsFull(cls2,PD.CA2,sg2)}</div>
+      <div class="pdsc"><div id="pd-table2">${pdCrossTable(1,rk2,PD.CA2,sg2)}</div></div>
     </div>
-    <div class="pdc">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-shrink:0">
-        <img src="${IMG_LOGO_CO}" style="width:30px;height:30px;border-radius:50%;object-fit:cover">
+    <div class="pdc2">
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;margin-bottom:10px">
+        <img src="${IMG_LOGO_CO}" style="width:28px;height:28px;border-radius:50%;object-fit:cover">
         <div style="flex:1">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8">${listaNomi[0]}</div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8">${listaNomi[0]} — Preferenze per Sezione</div>
           <div style="font-size:13px;font-weight:700;color:${PD.CA1}">${C1.nome}</div>
         </div>
-        ${sg1!==null?`<span style="font-size:12px;font-weight:800;padding:4px 12px;border-radius:999px;background:${PD.CA1}15;color:${PD.CA1};border:1px solid ${PD.CA1}30">${sg1} seggi cons.</span>`:''}
+        ${sg1!==null?`<span style="font-size:12px;font-weight:800;padding:4px 12px;border-radius:999px;background:${PD.CA1}15;color:${PD.CA1};border:1px solid ${PD.CA1}30;flex-shrink:0">${sg1} seggi cons.</span>`:''}
       </div>
-      <div class="pdsc" id="pd-pref1">${pdCandRowsFull(cls1,PD.CA1,sg1)}</div>
-    </div>
-    <div class="pdc">
-      <div class="pdct">Dettaglio per Sezione</div>
-      <div class="pdsc">
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="position:sticky;top:0;background:#fff">
-            ${['Sez.','Votanti','Affl.','CO (sind.)','%','IC (sind.)','%','CO lista','IC lista','St.'].map((h,i)=>`<th style="padding:8px ${i===0?12:8}px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:${i===3?PD.CA1:i===5?PD.CA2:'#94A3B8'};border-bottom:2px solid #E2E8F0;white-space:nowrap;background:#fff">${h}</th>`).join('')}
-          </tr></thead>
-          <tbody id="pd-sez-body">${pdSezFull()}</tbody>
-        </table>
-      </div>
+      <div class="pdsc"><div id="pd-table1">${pdCrossTable(0,rk1,PD.CA1,sg1)}</div></div>
     </div>
   </div>
 
@@ -2317,14 +2301,11 @@ function updPublicDash(){
   const inn=(id,v)=>{const e=$(id);if(e)e.innerHTML=v};
 
   sty('pdpbf','width',progP.toFixed(1)+'%');
-  const tb1s=$('pd-tab1-sub');if(tb1s)tb1s.textContent=`${done}/${N} sez. · ${affP>0?affP.toFixed(1)+'%':'—'} affl.`;
-  set('pd-aff',affP>0?affP.toFixed(1)+'%':'—');
-  set('pd-aff-sub',fn(t.vt)+' / '+fn(t.el));
-  set('pd-tvs',tvS>0?fn(tvS):'—');
-  set('pd-tvs-sub','b.'+fn(t.bi)+'·n.'+fn(t.nu));
-  set('pd-tvl',tvL>0?fn(tvL):'—');
-  set('pd-tvl-sub','disgiunti '+fn(t.vd));
-  set('pd-sez-cnt',done+' / '+N);
+  const t1s=$('pd-t1sub');if(t1s)t1s.textContent=`${done}/${N} sez · ${affP>0?affP.toFixed(1):'—'}% affl.`;
+  set('pd-aff',affP>0?affP.toFixed(1)+'%':'—');set('pd-aff-sub',fn(t.vt)+'/'+fn(t.el));
+  set('pd-tvs',tvS>0?fn(tvS):'—');set('pd-tvs-sub','b.'+fn(t.bi)+' n.'+fn(t.nu));
+  set('pd-tvl',tvL>0?fn(tvL):'—');set('pd-tvl-sub','dis. '+fn(t.vd));
+  set('pd-sez-cnt',done+'/'+N);
   set('pd-p2',tvS>0?p2.toFixed(1)+'%':'—');set('pd-v2',tvS>0?fn(t.vc2)+' voti sindaco':'In attesa…');sty('pd-bar2','width',p2+'%');
   set('pd-p1',tvS>0?p1.toFixed(1)+'%':'—');set('pd-v1',tvS>0?fn(t.vc1)+' voti sindaco':'In attesa…');sty('pd-bar1','width',p1+'%');
   set('pd-pl2',tvL>0?pl2.toFixed(1)+'%':'—');set('pd-vl2',fn(t.vl2)+' voti lista');sty('pd-lbar2','width',pl2+'%');
@@ -2332,19 +2313,14 @@ function updPublicDash(){
   set('pd-r2',tvS>0?p2.toFixed(1)+'%':'—');set('pd-r1',tvS>0?p1.toFixed(1)+'%':'—');sty('pd-rb2','width',p2+'%');sty('pd-rb1','width',p1+'%');
   if(ldr){
     set('pd-race-lbl',ldr+' +'+Math.abs(p1-p2).toFixed(1)+'pp · distacco '+fn(Math.abs(num(t.vc1)-num(t.vc2)))+' voti');
-    set('pd-delta',fn(Math.abs(num(t.vc1)-num(t.vc2))));
-    set('pd-ldr-badge',ldr+' conduce');
+    set('pd-delta',fn(Math.abs(num(t.vc1)-num(t.vc2))));set('pd-ldr-badge',ldr+' conduce');
   }
   inn('pd-parl',pdMiniCouncil(proj));
-  const cls1=proj&&!proj.isPareggioSindaco&&!proj.isPareggioLista?proj.classifica1:(CANDS[0]||[]).map((c,j)=>({nome:c.nome,genere:c.genere,voti:t.p1[j]||0})).sort((a,b)=>b.voti-a.voti);
-  const cls2=proj&&!proj.isPareggioSindaco&&!proj.isPareggioLista?proj.classifica2:(CANDS[1]||[]).map((c,j)=>({nome:c.nome,genere:c.genere,voti:t.p2[j]||0})).sort((a,b)=>b.voti-a.voti);
+  const rk1=pdRank(0,t),rk2=pdRank(1,t);
   const sg1=proj?proj.seggiLista1Cons:null,sg2=proj?proj.seggiLista2Cons:null;
-  inn('pd-pref1',pdCandRowsFull(cls1,PD.CA1,sg1));
-  inn('pd-pref2',pdCandRowsFull(cls2,PD.CA2,sg2));
-  inn('pd-sez-body',pdSezFull());
+  inn('pd-table1',pdCrossTable(0,rk1,PD.CA1,sg1));
+  inn('pd-table2',pdCrossTable(1,rk2,PD.CA2,sg2));
 }
-
-
 
 
 /* ══ RENDER CONTENUTO PROIEZIONE CONSIGLIO ═════════════════ */
