@@ -3,7 +3,26 @@
    Richiede: allData, totals, defSez, N, EL, C1, C2, $, fn, pct, num, view, userRole
 ═══════════════════════════════════════════════════════════ */
 
-const MC_AFFLUENZA   = 0.725;        // 70–75% → media 72.5%
+/* ── Calibrazione storica 2020 ────────────────────────────
+   Usata SOLO per stimare affluenza e peso sezioni.
+   NON usata per predire il risultato politico
+   (le coalizioni si sono rimescolate tra 2020 e 2026).   */
+const HIST_2020 = {
+  elettori:  5394,
+  votanti:   4093,
+  affl:      0.7588,
+  // Voti sindaco per sezione — proxy del peso relativo di ogni sezione
+  votiSez:   [573, 773, 614, 552, 673, 807]
+};
+
+/* Prior affluenza 2026 per sezione, derivati da:
+   - Affluenza sezione 2020 (stimata da peso sezione in 2020)
+   - Fattore correzione globale: 72% / 75.88% = 0.949
+     (elezioni comunali 2026 vs comunali+referendum 2020)
+   SEZ:         1      2      3      4      5      6   */
+const AFFL_PRIOR_SEZ = [0.739, 0.680, 0.765, 0.745, 0.695, 0.721];
+const AFFL_GLOBAL_PRIOR = 0.720;  // media pesata delle prior sopra
+
 const MC_SIMS_FULL   = 10000;
 const MC_SIMS_FAST   = 5000;
 const MC_DEBOUNCE_MS = 500;
@@ -123,9 +142,38 @@ function calculateTrendsBySezione() {
   const PRIOR_ALPHA = 1.5;
   const PRIOR_BETA  = 1.5;
 
+  /* Stima adattiva dell'affluenza globale:
+     Man mano che arrivano sezioni scrutinate, aggiorniamo
+     la stima dell'affluenza usando le sezioni osservate.
+     Le sezioni non ancora scrutinate usano la prior aggiornata. */
+  let sumVotantiObs = 0, sumElettoriObs = 0, nObs = 0;
   for (let i = 1; i <= N; i++) {
-    const s  = allData[i] || defSez();
-    const el = EL[i - 1];
+    const s = allData[i] || defSez();
+    if (num(s.votanti) > 0) {
+      sumVotantiObs += num(s.votanti);
+      sumElettoriObs += EL[i - 1];
+      nObs++;
+    }
+  }
+  /* Peso delle osservazioni: cresce da 0 a ~0.75 man mano che
+     arrivano sezioni (formula: nObs / (nObs + 4))
+     Con 0 sezioni → 100% prior storica
+     Con 2 sezioni → 33% observed, 67% prior
+     Con 4 sezioni → 50% / 50%
+     Con 6 sezioni → 60% observed, 40% prior               */
+  const obsWeight  = nObs / (nObs + 4);
+  const obsAffl    = sumElettoriObs > 0 ? sumVotantiObs / sumElettoriObs : AFFL_GLOBAL_PRIOR;
+  const globalAffl = AFFL_GLOBAL_PRIOR * (1 - obsWeight) + obsAffl * obsWeight;
+
+  for (let i = 1; i <= N; i++) {
+    const s   = allData[i] || defSez();
+    const el  = EL[i - 1];
+
+    /* Prior affluenza sezione: blend tra la prior storica specifica
+       della sezione e l'affluenza globale aggiornata dalle osservazioni */
+    const priorSez     = AFFL_PRIOR_SEZ[i - 1];
+    const effAffl      = priorSez * (1 - obsWeight) + globalAffl * obsWeight;
+    const expectedAtPoll  = Math.round(el * effAffl);
 
     const vTraina = num(s.vc2);
     const vMang   = num(s.vc1);
@@ -134,12 +182,11 @@ function calculateTrendsBySezione() {
     const alpha = PRIOR_ALPHA + vTraina;
     const beta  = PRIOR_BETA  + vMang;
 
-    const expectedAtPoll  = Math.round(el * MC_AFFLUENZA);
     const remaining       = Math.max(0, expectedAtPoll - votanti);
-    const validRate       = votanti > 0 ? (vTraina + vMang) / votanti : 0.95;
+    const validRate       = votanti > 0 ? (vTraina + vMang) / votanti : 0.975;
     const validRemaining  = Math.round(remaining * validRate);
 
-    trends.push({ sez: i, alpha, beta, remainingValid: validRemaining, expectedAtPoll });
+    trends.push({ sez: i, alpha, beta, remainingValid: validRemaining, expectedAtPoll, effAffl });
   }
   return trends;
 }
