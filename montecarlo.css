@@ -1,58 +1,147 @@
 /* ══ MONTE CARLO — sala stampa ═════════════════════════════ */
-.mc-wrap{max-width:920px;margin:0 auto}
-.mc-wrap.wide{max-width:1100px!important}
-.mc-hero{background:linear-gradient(135deg,#0d1117 0%,#1a2332 50%,#0d1117 100%);border-radius:var(--r);padding:1.5rem 1.25rem 1.25rem;margin-bottom:12px;border:1px solid rgba(255,255,255,.08);color:#fff;position:relative;overflow:hidden}
-.mc-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(27,82,153,.25),transparent 70%);pointer-events:none}
-.mc-hero h2{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:rgba(255,255,255,.45);margin-bottom:6px;position:relative}
-.mc-hero .mc-big{font-size:clamp(2rem,8vw,3.2rem);font-weight:800;font-family:'DM Mono',monospace;letter-spacing:-2px;line-height:1;position:relative;transition:color .4s}
-.mc-thermo{height:36px;border-radius:8px;background:rgba(255,255,255,.08);display:flex;overflow:hidden;margin:14px 0 10px;position:relative;box-shadow:inset 0 2px 8px rgba(0,0,0,.3)}
-.mc-thermo .mc-bar-mang{height:100%;background:linear-gradient(90deg,#1B5299,#2B6BB5);transition:width .8s cubic-bezier(.34,1.2,.64,1);display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:11px;font-weight:700;color:#fff}
-.mc-thermo .mc-bar-train{height:100%;background:linear-gradient(90deg,#B84020,#E85D30);transition:width .8s cubic-bezier(.34,1.2,.64,1);display:flex;align-items:center;padding-left:8px;font-size:11px;font-weight:700;color:#fff}
-.mc-thermo-pct{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:15px;font-weight:800;font-family:'DM Mono',monospace;text-shadow:0 1px 8px rgba(0,0,0,.8);z-index:2;pointer-events:none}
-.mc-conf-wrap{margin-top:10px;position:relative}
-.mc-conf-lbl{display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px;text-transform:uppercase;letter-spacing:.6px}
-.mc-conf-bar{height:8px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden}
-.mc-conf-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#7A5010,#4ADE80);transition:width .6s ease;width:0}
-.mc-alert{padding:10px 14px;border-radius:var(--rs);font-size:13px;line-height:1.5;margin-bottom:10px;font-weight:500}
-.mc-alert.red{background:#3d1515;color:#ffb4b4;border:1px solid #8B1A1A}
-.mc-alert.yellow{background:#3d3010;color:#fde68a;border:1px solid #F0C870}
-.mc-alert.green{background:#0f2d18;color:#86efac;border:1px solid #2D6A35}
-.mc-alert.gray{background:var(--sf2);color:var(--tx2);border:1px solid var(--bd)}
-.mc-badge-row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-.mc-badge-xl{padding:12px 18px;border-radius:var(--r);font-size:14px;font-weight:800;text-align:center;letter-spacing:.3px}
-.mc-badge-xl.win{background:linear-gradient(135deg,#0f2d18,#1a4d28);color:#4ADE80;border:2px solid #4ADE80;animation:mcPulse 2s ease infinite}
-.mc-badge-xl.tie{background:var(--aml);color:var(--am);border:2px solid #F0C870}
-.mc-badge-xl.official{background:var(--c1l);color:var(--c1t);border:1px solid #A8CAEA;font-size:12px}
-@keyframes mcPulse{0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,.4)}50%{box-shadow:0 0 20px 4px rgba(74,222,128,.25)}}
-.mc-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-.mc-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:1rem 1.15rem}
-.mc-card .ct{display:block;margin-bottom:10px}
-.mc-ci{font-size:28px;font-weight:800;font-family:'DM Mono',monospace;color:var(--c1)}
-.mc-ci-band{height:12px;background:var(--sf2);border-radius:6px;margin:8px 0;position:relative;overflow:hidden}
-.mc-ci-band .mc-ci-range{position:absolute;height:100%;background:rgba(27,82,153,.2);border:1px solid var(--c1m);border-radius:6px;transition:left .6s,width .6s}
-.mc-ci-dot{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;background:var(--c2);transform:translate(-50%,-50%);transition:left .6s;box-shadow:0 0 8px rgba(184,64,32,.6)}
-.mc-casino{height:100px;background:#0d1117;border-radius:var(--rs);margin-bottom:10px;display:flex;align-items:flex-end;justify-content:center;gap:4px;padding:8px 12px 4px;overflow:hidden}
-.mc-casino .mc-ball{width:14px;border-radius:3px 3px 50% 50%;background:var(--c2);animation:mcDrop .6s ease forwards;opacity:0}
-@keyframes mcDrop{0%{opacity:0;transform:translateY(-80px)}70%{opacity:1}100%{opacity:1;transform:translateY(0)}}
-.mc-spinner{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--tx3);padding:8px 0}
-.mc-spinner .mc-spin{width:14px;height:14px;border:2px solid var(--bd);border-top-color:var(--c1);border-radius:50%;animation:mcRot .7s linear infinite}
-@keyframes mcRot{to{transform:rotate(360deg)}}
-.mc-home-badge{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;background:linear-gradient(135deg,#1a2332,#0d1117);color:#fff;border-radius:var(--rs);font-size:12px;font-weight:600;margin-bottom:10px;border:1px solid rgba(255,255,255,.1);cursor:pointer;width:100%;justify-content:center;transition:transform .1s,box-shadow .15s}
-.mc-home-badge:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.15)}
-.mc-home-badge .mc-arr{font-size:10px;color:#4ADE80}
-.mc-home-badge.inactive{opacity:.7;cursor:default}
-.mc-summary{font-size:14px;line-height:1.65;color:var(--tx2);padding:12px 14px;background:var(--sf2);border-radius:var(--rs);border-left:4px solid var(--c1)}
-.mc-sez-decisiva{font-size:15px;font-weight:700;color:var(--c1t)}
-@media(max-width:600px){.mc-grid2{grid-template-columns:1fr}}
+.mc-wrap { max-width: 920px; margin: 0 auto }
+.mc-wrap.wide { max-width: 1100px !important }
 
-/* Nuovi stili per Dashboard Bayesiana */
+/* ── Hero ───────────────────────────────────────────────── */
+.mc-hero {
+  background: linear-gradient(135deg, #0d1117 0%, #1a2332 50%, #0d1117 100%);
+  border-radius: var(--r);
+  padding: 1.5rem 1.25rem 1.25rem;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255,255,255,.08);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.mc-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(27,82,153,.25), transparent 70%);
+  pointer-events: none;
+}
+.mc-hero h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: rgba(255,255,255,.45);
+  margin-bottom: 6px;
+  position: relative;
+}
+
+/* ── Termometro ─────────────────────────────────────────── */
+.mc-thermo {
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.08);
+  display: flex;
+  overflow: hidden;
+  margin: 14px 0 0;
+  position: relative;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.3);
+}
+/* Barre senza testo — solo colore e animazione */
+.mc-thermo .mc-bar-mang {
+  height: 100%;
+  background: linear-gradient(90deg, #1B5299, #2B6BB5);
+  transition: width .8s cubic-bezier(.34,1.2,.64,1);
+  flex-shrink: 0;
+}
+.mc-thermo .mc-bar-train {
+  height: 100%;
+  background: linear-gradient(90deg, #B84020, #E85D30);
+  transition: width .8s cubic-bezier(.34,1.2,.64,1);
+  flex-shrink: 0;
+}
+/* Label centrale: solo il leader + % */
+.mc-thermo-pct {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 13px;
+  font-weight: 800;
+  font-family: 'DM Mono', monospace;
+  text-shadow: 0 1px 10px rgba(0,0,0,1);
+  z-index: 2;
+  pointer-events: none;
+  white-space: nowrap;
+  color: #fff;
+}
+/* Legenda sotto: nome + % per entrambi */
+.mc-thermo-legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  position: relative;
+}
+.mc-thermo-legend .mc-leg-m { color: #5a9fd4 }
+.mc-thermo-legend .mc-leg-t { color: #e87a5a }
+
+/* ── Confidence bar ─────────────────────────────────────── */
+.mc-conf-wrap { margin-top: 14px; position: relative }
+.mc-conf-lbl {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: rgba(255,255,255,.4);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+}
+.mc-conf-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden }
+.mc-conf-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #7A5010, #4ADE80); transition: width .6s ease; width: 0 }
+
+/* ── Alert / Badge ──────────────────────────────────────── */
+.mc-alert { padding: 10px 14px; border-radius: var(--rs); font-size: 13px; line-height: 1.5; margin-bottom: 10px; font-weight: 500 }
+.mc-alert.red    { background: #3d1515; color: #ffb4b4; border: 1px solid #8B1A1A }
+.mc-alert.yellow { background: #3d3010; color: #fde68a; border: 1px solid #F0C870 }
+.mc-alert.green  { background: #0f2d18; color: #86efac; border: 1px solid #2D6A35 }
+.mc-alert.gray   { background: rgba(255,255,255,.06); color: rgba(255,255,255,.6); border: 1px solid rgba(255,255,255,.12) }
+
+.mc-badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 }
+.mc-badge-xl  { padding: 12px 18px; border-radius: var(--r); font-size: 14px; font-weight: 800; text-align: center; letter-spacing: .3px; width: 100%; margin-top: 10px }
+.mc-badge-xl.win      { background: linear-gradient(135deg,#0f2d18,#1a4d28); color: #4ADE80; border: 2px solid #4ADE80; animation: mcPulse 2s ease infinite }
+.mc-badge-xl.tie      { background: rgba(240,200,112,.1); color: #fde68a; border: 2px solid #F0C870 }
+.mc-badge-xl.official { background: rgba(27,82,153,.2); color: #A8CAEA; border: 1px solid rgba(168,202,234,.4); font-size: 12px }
+@keyframes mcPulse { 0%,100%{ box-shadow: 0 0 0 0 rgba(74,222,128,.4) } 50%{ box-shadow: 0 0 20px 4px rgba(74,222,128,.25) } }
+
+/* ── Card griglia ───────────────────────────────────────── */
+.mc-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px }
+
+/* DARK override — tutte le .mc-card dentro .mc-wrap sono scure */
+.mc-wrap .mc-card {
+  background: #111827;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r);
+  padding: 1rem 1.15rem;
+  color: #fff;
+}
+.mc-wrap .mc-card .ct {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: rgba(255,255,255,.35);
+  font-weight: 600;
+}
+
+/* ── Chip statistiche ───────────────────────────────────── */
 .mc-data-chip {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255,255,255,.05);
+  border-radius: 8px;
+  padding: 12px 8px;
+  border: 1px solid rgba(255,255,255,.1);
   text-align: center;
   flex: 1;
+  min-width: 0;
+}
+.mc-data-chip.accent {
+  border-color: rgba(74,222,128,.4);
+  background: rgba(74,222,128,.07);
 }
 .mc-data-val {
   display: block;
@@ -60,24 +149,108 @@
   font-size: 1.1rem;
   font-weight: 700;
   color: #fff;
+  margin-bottom: 3px;
 }
 .mc-data-lbl {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.4);
-  letter-spacing: 0.5px;
+  color: rgba(255,255,255,.38);
+  letter-spacing: .5px;
 }
+
+/* ── Righe parametri ────────────────────────────────────── */
+.mc-param-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  font-size: 13px;
+}
+.mc-param-row:last-child { border-bottom: none; padding-bottom: 0 }
+.mc-param-lbl { color: rgba(255,255,255,.45); font-size: 12px }
+.mc-param-val { font-family: 'DM Mono', monospace; font-weight: 700; color: #fff }
+
+/* ── Banda CI ───────────────────────────────────────────── */
+.mc-ci-band {
+  height: 10px;
+  background: rgba(255,255,255,.08);
+  border-radius: 5px;
+  margin: 12px 0 16px;
+  position: relative;
+}
+
+/* ── Casino ─────────────────────────────────────────────── */
+.mc-casino {
+  height: 100px;
+  background: #0d1117;
+  border-radius: var(--rs);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 12px 4px;
+  overflow: hidden;
+}
+.mc-casino .mc-ball {
+  width: 14px;
+  border-radius: 3px 3px 50% 50%;
+  animation: mcDrop .6s ease forwards;
+  opacity: 0;
+}
+@keyframes mcDrop {
+  0%   { opacity: 0; transform: translateY(-80px) }
+  70%  { opacity: 1 }
+  100% { opacity: 1; transform: translateY(0) }
+}
+
+/* ── Spinner ────────────────────────────────────────────── */
+.mc-spinner { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,.5); padding: 8px 0 }
+.mc-spinner .mc-spin { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.15); border-top-color: #5a9fd4; border-radius: 50%; animation: mcRot .7s linear infinite }
+@keyframes mcRot { to { transform: rotate(360deg) } }
+
+/* ── Home badge ─────────────────────────────────────────── */
+.mc-home-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #1a2332, #0d1117);
+  color: #fff; border-radius: var(--rs);
+  font-size: 12px; font-weight: 600;
+  margin-bottom: 10px;
+  border: 1px solid rgba(255,255,255,.1);
+  cursor: pointer; width: 100%; justify-content: center;
+  transition: transform .1s, box-shadow .15s;
+}
+.mc-home-badge:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.15) }
+.mc-home-badge .mc-arr { font-size: 10px; color: #4ADE80 }
+.mc-home-badge.inactive { opacity: .7; cursor: default }
+
+/* ── Summary ────────────────────────────────────────────── */
+.mc-summary {
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(255,255,255,.65);
+  padding: 14px 16px;
+  background: rgba(27,82,153,.1);
+  border-radius: var(--rs);
+  border-left: 3px solid #2B6BB5;
+  margin-bottom: 16px;
+}
+.mc-sez-decisiva { font-size: 15px; font-weight: 700; color: #5a9fd4 }
+
+/* ── Pulse dot ──────────────────────────────────────────── */
 .mc-pulse-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  background: #4ADE80;
-  border-radius: 50%;
-  margin-right: 6px;
+  display: inline-block; width: 8px; height: 8px;
+  background: #4ADE80; border-radius: 50%; margin-right: 6px;
   animation: mc-pulse 1.5s infinite;
 }
 @keyframes mc-pulse {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.4); opacity: 0.5; }
-  100% { transform: scale(1); opacity: 1; }
+  0%   { transform: scale(1);   opacity: 1 }
+  50%  { transform: scale(1.4); opacity: .5 }
+  100% { transform: scale(1);   opacity: 1 }
+}
+
+@media (max-width: 600px) {
+  .mc-grid2 { grid-template-columns: 1fr }
 }
