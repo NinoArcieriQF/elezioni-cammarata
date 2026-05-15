@@ -1008,6 +1008,7 @@ function renSez(){
     return items.map(e=>`<div class="sr"><span class="srl">${e.n}</span><span class="srv" style="color:${col}">${fn(e.c)}</span></div>`).join('');
   };
   const hasUndo=d.lastBallots&&d.lastBallots.length>0;
+
   $('root').innerHTML=`
     <div class="tb">
       <div style="display:flex;align-items:center;gap:10px">
@@ -1068,8 +1069,24 @@ function renSez(){
     <button class="btn${d.done?' bg':''} bw" style="margin-top:4px" onclick="toggleDone()">
       ${d.done?'✓ Completata — tocca per riaprire':'Segna sezione come completata'}
     </button>
-  `;
-}
+
+    ${userRole === 'admin' ? `
+    <div style="margin-top: 25px; padding: 15px; background: #fff; border: 2px dashed var(--c1); border-radius: 12px;">
+      <p style="font-size: 11px; color: var(--c1); font-weight: 800; text-transform: uppercase; margin-bottom: 10px;">🛠️ Simulatore Carico (Solo Admin)</p>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <input type="number" id="test-count" value="10" min="1" max="500" 
+               style="width: 80px; padding: 10px; border: 2px solid #eee; border-radius: 8px; font-weight: bold; text-align: center;">
+        <button type="button" class="btn" style="background: var(--c1); color: white; flex: 1; padding: 10px; font-weight: 700;" 
+                onclick="testMultiAdd(document.getElementById('test-count').value)">
+          🚀 Inserisci Schede Test
+        </button>
+      </div>
+      <p style="font-size: 10px; color: #666; margin-top: 8px;">Generazione casuale (trend ~55% Traina) per testare Monte Carlo.</p>
+    </div>
+    ` : ''}
+  `; // Chiude l'assegnazione innerHTML
+} // Chiude la funzione renSez
+  
 async function toggleDone(){
   fd.done=!fd.done;fd.upd=new Date().toISOString();
   allData[selSez]=fd;cacheSave();
@@ -3073,6 +3090,41 @@ async function resetAll(){
   goHome();
 }
 
+/* ── FUNZIONE DI STRESS TEST PER MONTE CARLO ── */
+window.testMultiAdd = function(count) {
+  count = parseInt(count);
+  if (isNaN(count) || count <= 0) {
+    alert("Inserisci un numero valido!");
+    return;
+  }
+
+  // selSez è la variabile globale che indica la sezione aperta
+  if (typeof selSez === 'undefined' || !selSez) {
+    alert("Errore: nessuna sezione selezionata!");
+    return;
+  }
+
+  if (!confirm(`Inserire ${count} schede simulate nella Sezione ${selSez}?`)) return;
+
+  let added = 0;
+  for (let i = 0; i < count; i++) {
+    // Simuliamo un trend: 55% Traina (v2), 45% Mangiapane (v1)
+    const v2 = Math.random() > 0.45 ? 1 : 0;
+    const v1 = v2 === 1 ? 0 : 1;
+
+    // Chiama la tua funzione originale doSaveBallot(v1, v2, bianche, prefs)
+    if (typeof window.doSaveBallot === 'function') {
+      window.doSaveBallot(v1, v2, 0, []); 
+      added++;
+    }
+  }
+
+  console.log(`[TEST] Inviate ${added} schede al server.`);
+  alert(`Operazione completata! ${added} schede aggiunte alla sezione ${selSez}.`);
+  
+  if (typeof window.goHome === 'function') window.goHome();
+};
+
 // Espone funzioni globali per onclick inline
 window.selRole=selRole;window.selLoginSez=selLoginSez;window.checkPw=checkPw;
 window.goHome=goHome;window.goSez=goSez;window.showDash=showDash;window.showAdmin=showAdmin;
@@ -3090,6 +3142,8 @@ window.setTicketTab=setTicketTab;window.showPublicDash=showPublicDash;
 window.showRappMenu=showRappMenu;window.showSezStats=showSezStats;
 window.showAnalytics=showAnalytics;window.setAnalyticsTab=setAnalyticsTab;
 window.setAnalyticsLista=setAnalyticsLista;window.exportAnalyticsCSV=exportAnalyticsCSV;
+// Aggiungiamo anche questa per sicurezza
+window.testMultiAdd=testMultiAdd; 
 </script>
 <script src="montecarlo.js"></script>
 </body>
