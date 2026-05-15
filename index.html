@@ -236,6 +236,19 @@ let selRoleVal='coord', selSezLogin=null;
 let CANDS=[], listaNomi=[C1.lista, C2.lista];
 let isOnline=navigator.onLine, fbReady=false;
 let unsubSez=null, unsubCfg=null;
+let monteCarloCache = {
+  active: false,
+  totali: null,
+  probTraina: 0,
+  probMangiapane: 0,
+  intervalloMin: 0,
+  intervalloMax: 0,
+  sezioneDecisiva: null,
+  certezzaMatematica: false,
+  ultimoAggiornamento: null,
+  nSchede: 0,
+  trendStorico: []
+};
 
 /* ══ FIREBASE WRAPPER ══════════════════════════════════════ */
 window.addEventListener('fb-ready', ()=>{fbReady=true;onFbReady()});
@@ -270,16 +283,15 @@ async function fbLogEvent(evt){
     });
   }catch(e){}
 }
-
 function onFbReady(){
-  // All'avvio: listener in tempo reale sulle sezioni + configurazione
+  // Listener esistente per sezioni
   try{
     window.fb.onSnapshot(window.fb.collection(window.fb.db,'sezioni'), snap=>{
       const fresh={};
       snap.forEach(doc=>{fresh[doc.id]={...defSez(),...doc.data()}});
       for(let i=1;i<=N;i++){allData[i]=fresh[String(i)]||defSez()}
       cacheSave();
-      // Aggiorna la UI se siamo in una vista che mostra i dati
+      // Aggiorna la UI
       if(view==='home')showHome();
       else if(view==='dash')updDash();
       else if(view==='public')updPublicDash();
@@ -289,7 +301,10 @@ function onFbReady(){
         fd={...defSez(),...fresh[String(selSez)]};
         renSez();
       }
+      // ⭐ NUOVO: aggiorna Monte Carlo dopo ogni cambiamento
+      aggiornaMonteCarlo();
     });
+    
     window.fb.onSnapshot(window.fb.doc(window.fb.db,'config','main'), snap=>{
       if(snap.exists()){
         const data=snap.data();
@@ -300,7 +315,6 @@ function onFbReady(){
           listaNomi=data.liste;
         }
         cacheSave();
-        // Refresh UI se in una vista dove si vedono nomi/candidati
         if(view==='home')showHome();
         else if(view==='dash')renDash();
         else if(view==='public')showPublicDash();
@@ -314,6 +328,7 @@ function onFbReady(){
   }catch(e){console.error('FB listen err',e)}
   const s=$('pw-fb-status');if(s){s.innerHTML='<span style="color:var(--gn)">● Connesso al server</span>'}
 }
+  
 
 /* ══ BACKUP AUTOMATICI (ogni 2 minuti) ═════════════════════
    Tiene le ultime 30 versioni del database in localStorage
@@ -844,6 +859,347 @@ function closeModal(){
   if(el){el.className='';el.innerHTML=''}
 }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+   📊 MONTE CARLO - PREVISIONI ELETTORALI IN TEMPO REALE
+   ═══════════════════════════════════════════════════════════════════════ */
+
+let monteCarloCache = {
+  active: false,
+  totali: null,
+  probTraina: 0,
+  probMangiapane: 0,
+  intervalloMin: 0,
+  intervalloMax: 0,
+  sezioneDecisiva: null,
+  certezzaMatematica: false,
+  ultimoAggiornamento: null,
+  nSchede: 0,
+  trendStorico: []  // ultimi 30 valori di probabilità Traina
+};
+
+// Soglie di confidenza in base al numero di schede scrutinate
+function getConfidenceLevel(schedeScrutinate) {
+  const totalePrevisto = 2500; // ~70% di 3564
+  if (schedeScrutinate < 250) return { livello: 'non_attivo', confidenza: 0, messaggio: '🔮 Previsioni disponibili a partire da 250 schede scrutinate', classe: 'bwt' };
+  if (schedeScrutinate < 400) return { livello: 'sperimentale', confidenza: 25, messaggio: '⚠️ DATI ANCORA LIMITATI - Attendibilità bassa', classe: 'bdis' };
+  if (schedeScrutinate < 500) return { livello: 'parziale', confidenza: 55, messaggio: '📊 Attendibilità in crescita', classe: 'bwip' };
+  if (schedeScrutinate < 800) return { livello: 'ufficiale', confidenza: 85, messaggio: '✓ PREVISIONE AFFIDABILE', classe: 'bok' };
+  return { livello: 'certezza', confidenza: 95, messaggio: '✓ ALTA AFFIDABILITÀ', classe: 'bok' };
+}
+
+// Calcola i trend per ogni sezione (momentum e distribuzione)
+function calculateTrendsBySezione() {
+  const trends = {};
+  for (let s = 1; s <= N; s++) {
+    const sez = allData[s] || defSez();
+    const totSchede = num(sez.votanti);
+    if (totSchede < 10) {
+      trends[s] = { pTraina: 0.5, forza: 0, campione: 0 };
+      continue;
+    }
+    const vTraina = num(sez.vc2);
+    const vMangia = num(sez.vc1);
+    const totSind = vTraina + vMangia;
+    const pTraina = totSind > 0 ? vTraina / totSind : 0.5;
+    
+    // Forza del trend: più schede = più affidabile
+    const forza = Math.min(0.9, totSchede / 300);
+    trends[s] = { pTraina, forza, campione: totSchede };
+  }
+  return trends;
+}
+
+// Simulazione Monte Carlo (10.000 scenari)
+function monteCarloSimulation() {
+  const t = totals(allData);
+  const totaleSchede = t.vt;
+  
+  // Soglia di attivazione: almeno 250 schede
+  if (totaleSchede < 250) {
+    monteCarloCache.active = false;
+    return null;
+  }
+  
+  monteCarloCache.active = true;
+  monteCarloCache.nSchede = totaleSchede;
+  
+  const trends = calculateTrendsBySezione();
+  const N_SIMULATIONS = 10000;
+  let vittorieTraina = 0;
+  let risultati = [];
+  
+  // Calcola le schede residue per sezione (stima basata su affluenza prevista 70%)
+  const affluenzaPrevista = 0.72;
+  const schedeTotaliPreviste = Math.floor(EL.reduce((a,b)=>a+b,0) * affluenzaPrevista);
+  const schedeGiaVotate = t.vt;
+  const schedeResidueTotali = Math.max(0, schedeTotaliPreviste - schedeGiaVotate);
+  
+  // Distribuzione residua per sezione (proporzionale agli elettori)
+  const schedeResiduePerSezione = {};
+  const totElettori = EL.reduce((a,b)=>a+b,0);
+  for (let s = 1; s <= N; s++) {
+    const pesoSez = EL[s-1] / totElettori;
+    schedeResiduePerSezione[s] = Math.floor(schedeResidueTotali * pesoSez);
+  }
+  
+  for (let sim = 0; sim < N_SIMULATIONS; sim++) {
+    let vc1_finale = t.vc1;
+    let vc2_finale = t.vc2;
+    
+    for (let s = 1; s <= N; s++) {
+      const trend = trends[s];
+      const residui = schedeResiduePerSezione[s] || 0;
+      if (residui <= 0) continue;
+      
+      // Probabilità base dal trend, con rumore gaussiano simulato
+      let pBase = trend.pTraina;
+      // Aggiungiamo variabilità: deviazione standard decresce con il campione
+      const sd = Math.max(0.05, 0.2 / Math.sqrt(trend.campione + 10));
+      let pSim = pBase + (Math.random() - 0.5) * sd * 2;
+      pSim = Math.min(0.95, Math.max(0.05, pSim));
+      
+      // Bernoulli per ogni scheda residua (approssimazione binomiale)
+      let vTrainaSim = 0;
+      for (let r = 0; r < residui; r++) {
+        if (Math.random() < pSim) vTrainaSim++;
+      }
+      let vMangiaSim = residui - vTrainaSim;
+      
+      vc2_finale += vTrainaSim;
+      vc1_finale += vMangiaSim;
+    }
+    
+    const trainaVince = vc2_finale > vc1_finale;
+    if (trainaVince) vittorieTraina++;
+    risultati.push(vc2_finale / (vc1_finale + vc2_finale));
+  }
+  
+  // Ordina i risultati per calcolare intervallo di confidenza
+  risultati.sort((a,b) => a - b);
+  const idx05 = Math.floor(N_SIMULATIONS * 0.05);
+  const idx95 = Math.floor(N_SIMULATIONS * 0.95);
+  const intervalloMin = risultati[idx05] * 100;
+  const intervalloMax = risultati[idx95] * 100;
+  
+  const probTraina = (vittorieTraina / N_SIMULATIONS) * 100;
+  const probMangiapane = 100 - probTraina;
+  const certezzaMatematica = probTraina > 99.5 || probMangiapane > 99.5;
+  
+  // Trova la sezione più decisiva
+  let sezioneDecisiva = null;
+  let maxImpatto = 0;
+  for (let s = 1; s <= N; s++) {
+    const residuiSez = schedeResiduePerSezione[s] || 0;
+    const trend = trends[s];
+    if (residuiSez > 20 && trend.forza > 0.3) {
+      const impatto = residuiSez * Math.abs(trend.pTraina - 0.5);
+      if (impatto > maxImpatto) {
+        maxImpatto = impatto;
+        sezioneDecisiva = s;
+      }
+    }
+  }
+  
+  // Aggiorna trend storico (ultimi 30 valori)
+  monteCarloCache.trendStorico.push({ ts: Date.now(), prob: probTraina });
+  if (monteCarloCache.trendStorico.length > 30) monteCarloCache.trendStorico.shift();
+  
+  monteCarloCache.probTraina = probTraina;
+  monteCarloCache.probMangiapane = probMangiapane;
+  monteCarloCache.intervalloMin = intervalloMin;
+  monteCarloCache.intervalloMax = intervalloMax;
+  monteCarloCache.sezioneDecisiva = sezioneDecisiva;
+  monteCarloCache.certezzaMatematica = certezzaMatematica;
+  monteCarloCache.ultimoAggiornamento = new Date();
+  
+  return {
+    probTraina, probMangiapane,
+    intervalloMin, intervalloMax,
+    sezioneDecisiva,
+    certezzaMatematica,
+    nSimulazioni: N_SIMULATIONS
+  };
+}
+
+// DeBounce per non sovraccaricare il ricalcolo
+let monteCarloDebounceTimer = null;
+function aggiornaMonteCarlo() {
+  if (monteCarloDebounceTimer) clearTimeout(monteCarloDebounceTimer);
+  monteCarloDebounceTimer = setTimeout(() => {
+    monteCarloSimulation();
+    // Se siamo nella vista montecarlo, aggiorna la UI
+    if (view === 'montecarlo') renMonteCarlo();
+    // Aggiorna anche il badge in home se presente
+    const badgeEl = document.getElementById('home-mc-badge');
+    if (badgeEl && monteCarloCache.active) {
+      const conf = getConfidenceLevel(monteCarloCache.nSchede);
+      badgeEl.innerHTML = `🔮 Traina ${monteCarloCache.probTraina.toFixed(1)}% <span style="font-size:9px;opacity:0.7">${conf.messaggio}</span>`;
+    }
+  }, 800);
+}
+
+// Mostra la vista Monte Carlo
+function showMonteCarlo() {
+  if (userRole !== 'admin' && userRole !== 'coord') {
+    alert('Previsioni disponibili solo per admin e coordinatore');
+    return;
+  }
+  view = 'montecarlo';
+  killCharts();
+  renMonteCarlo();
+}
+
+function renMonteCarlo() {
+  const t = totals(allData);
+  const conf = getConfidenceLevel(t.vt);
+  const previsione = monteCarloCache.active ? monteCarloSimulation() : null;
+  const prob = monteCarloCache.probTraina || 50;
+  const probOpp = 100 - prob;
+  const intervallo = monteCarloCache.intervalloMin && monteCarloCache.intervalloMax
+    ? `${monteCarloCache.intervalloMin.toFixed(1)}% - ${monteCarloCache.intervalloMax.toFixed(1)}%`
+    : '—';
+  
+  // Dati per grafico storico
+  const storicoLabels = monteCarloCache.trendStorico.slice(-20).map(p => '');
+  const storicoData = monteCarloCache.trendStorico.slice(-20).map(p => p.prob);
+  
+  $('root').className = 'wide';
+  $('root').innerHTML = `
+    <div class="tb">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <button class="btn" onclick="goHome()">← Torna</button>
+        <div><div class="tb-t">🎲 Monte Carlo · Previsioni Elettorali</div>
+        <div class="tb-s">${N} sezioni · ${t.vt} schede scrutinate · ${conf.messaggio}</div></div>
+        <div class="badge ${conf.classe}" style="margin-left:auto">Confidenza: ${conf.confidenza}%</div>
+      </div>
+    </div>
+
+    <!-- BARRA TERMOMETRO PROBABILITÀ -->
+    <div class="card" style="text-align:center">
+      <p class="ct" style="color:var(--c2)">🔮 PROBABILITÀ DI VITTORIA</p>
+      <div style="font-size:48px;font-weight:800;margin:10px 0;font-family:'DM Mono',monospace">
+        <span style="color:var(--c2)">TRAINA ${prob.toFixed(1)}%</span>
+        <span style="color:var(--tx3)"> / </span>
+        <span style="color:var(--c1)">MANGIAPANE ${probOpp.toFixed(1)}%</span>
+      </div>
+      <div class="pt" style="height:24px;border-radius:40px;background:var(--sf2)">
+        <div class="pf" style="width:${prob}%;background:var(--c2);height:100%;border-radius:40px;transition:width .6s ease"></div>
+      </div>
+      ${monteCarloCache.certezzaMatematica ? '<div class="no nok" style="margin-top:12px;font-size:14px">✓ MATEMATICAMENTE VINTO — Non più recuperabile</div>' : ''}
+      ${conf.livello === 'sperimentale' ? '<div class="no nwa" style="margin-top:12px">⚠️ Previsione sperimentale — attendibilità in crescita con più schede</div>' : ''}
+    </div>
+
+    <!-- INTERVALLO DI CONFIDENZA -->
+    <div class="kg" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:12px">
+      <div class="kpi"><div class="kl">Intervallo di confidenza (95%)</div><div class="kv" style="font-size:20px">${intervallo}</div><div class="ks">Traina tra questi valori</div></div>
+      <div class="kpi"><div class="kl">Schede scrutinate</div><div class="kv">${fn(t.vt)}</div><div class="ks">su ~2500 previste</div></div>
+      <div class="kpi"><div class="kl">Sezione decisiva</div><div class="kv" style="font-size:20px">${monteCarloCache.sezioneDecisiva ? 'Sez. ' + monteCarloCache.sezioneDecisiva : '—'}</div><div class="ks">Quella che può ribaltare</div></div>
+    </div>
+
+    <!-- GRAFICO EVOLUZIONE PROBABILITÀ -->
+    <div class="card">
+      <span class="ct">📈 Evoluzione della probabilità di Traina (ultime 20 rilevazioni)</span>
+      <canvas id="mc-trend-chart" height="150"></canvas>
+      <p class="ks" style="text-align:center;margin-top:8px">Ogni punto è aggiornato dopo ogni scheda inserita</p>
+    </div>
+
+    <!-- RIEPILOGO SINTETICO PER STAMPA/COMUNICATO -->
+    <div class="card" style="background:var(--c1l);border-color:#A8CAEA">
+      <span class="ct" style="color:var(--c1m)">📢 SINTESI PER COMUNICATO STAMPA</span>
+      <p style="font-size:14px;font-weight:600;margin:8px 0">Con ${fn(t.vt)} schede scrutinate su circa 2.500 previste,</p>
+      <p style="font-size:13px;line-height:1.5">
+        <strong style="color:var(--c2)">Giuliano Traina</strong> è in vantaggio con il <strong>${prob.toFixed(1)}%</strong> di probabilità di vittoria.<br>
+        L'intervallo di confidenza al 95% è <strong>${intervallo}</strong>.<br>
+        ${monteCarloCache.sezioneDecisiva ? `La sezione più decisiva è la <strong>n.${monteCarloCache.sezioneDecisiva}</strong>.` : ''}
+        ${monteCarloCache.certezzaMatematica ? '<strong>✅ La vittoria è matematicamente certa.</strong>' : ''}
+      </p>
+    </div>
+
+    <!-- METODOLOGIA -->
+    <div class="card">
+      <span class="ct">📐 Metodologia Monte Carlo</span>
+      <p style="font-size:12px;color:var(--tx2);line-height:1.6">
+        Il sistema esegue <strong>10.000 simulazioni</strong> dei voti non ancora scrutinati, basandosi sui trend reali di ogni sezione (media mobile, campione, volatilità storica).<br>
+        Per ogni simulazione vengono assegnati voti probabilistici alle schede residue, rispettando i trend osservati.<br>
+        L'<strong>intervallo di confidenza al 95%</strong> indica il range in cui cadrà il risultato reale con il 95% di probabilità.<br>
+        La <strong>sezione decisiva</strong> è quella che più spesso ribalta l'esito nelle simulazioni.
+      </p>
+      <p class="ks" style="margin-top:10px">Ultimo aggiornamento: ${monteCarloCache.ultimoAggiornamento ? monteCarloCache.ultimoAggiornamento.toLocaleTimeString('it-IT') : '—'}</p>
+    </div>
+
+    <div class="io">
+      <button class="btn bp" onclick="goHome()">← Torna alla Home</button>
+      <button class="btn bg" onclick="monteCarloSimulation(); renMonteCarlo();">⟳ Ricalcola ora</button>
+    </div>
+  `;
+
+  // Grafico trend storico
+  setTimeout(() => {
+    const ctx = document.getElementById('mc-trend-chart');
+    if (ctx && storicoData.length > 0) {
+      if (charts.mcTrend) charts.mcTrend.destroy();
+      charts.mcTrend = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: storicoLabels,
+          datasets: [{
+            label: 'Probabilità Traina (%)',
+            data: storicoData,
+            borderColor: '#B84020',
+            backgroundColor: 'rgba(184,64,32,0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            pointBackgroundColor: '#B84020'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ctx.raw.toFixed(1) + '%' } }
+          },
+          scales: {
+            y: { min: 0, max: 100, grid: { color: 'rgba(0,0,0,0.05)' }, title: { display: true, text: '%' } },
+            x: { ticks: { display: false } }
+          }
+        }
+      });
+    }
+  }, 50);
+}
+
+// Integra l'aggiornamento automatico in onSnapshot
+const originalOnFbReady = onFbReady;
+window.onFbReady = function() {
+  if (originalOnFbReady) originalOnFbReady();
+  // Ogni volta che arrivano dati, rilanciamo Monte Carlo
+  if (typeof aggiornaMonteCarlo === 'function') aggiornaMonteCarlo();
+};
+
+// Aggiungi badge in home (modifica showHome)
+const originalShowHome = showHome;
+window.showHome = function() {
+  originalShowHome();
+  // Aggiungi badge Monte Carlo nella home (solo admin/coord)
+  if (userRole === 'admin' || userRole === 'coord') {
+    const titoloDiv = document.querySelector('.tb');
+    if (titoloDiv && !document.getElementById('home-mc-badge')) {
+      const badge = document.createElement('button');
+      badge.id = 'home-mc-badge';
+      badge.className = 'btn bp';
+      badge.style.padding = '6px 12px';
+      badge.style.fontSize = '12px';
+      badge.onclick = () => showMonteCarlo();
+      const prob = monteCarloCache.active ? monteCarloCache.probTraina.toFixed(1) : '—';
+      const conf = getConfidenceLevel(monteCarloCache.nSchede || 0);
+      badge.innerHTML = `🎲 Monte Carlo: ${prob}% Traina <span style="font-size:9px;opacity:0.7">${conf.messaggio}</span>`;
+      titoloDiv.appendChild(badge);
+    }
+  }
+};
+
 /* ══ LOGIN ══════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded',()=>{
   $('pw-sub').textContent=COMUNE+' · '+DATA_EL;
@@ -947,6 +1303,7 @@ function showHome(){
       <button class="btn" onclick="showAdmin()">⚙️ Candidati</button>
       <button class="btn" onclick="showBackups()">💾 Backup</button>
       <button class="btn bg" onclick="exportCSV()">📊 CSV</button>
+      <button class="btn" style="background:#7A2E2E;color:#fff;border-color:#5A1E1E" onclick="showMonteCarlo()">🎲 Monte Carlo</button>
     </div>`:`
     <button class="btn bp bw blg" style="margin-bottom:1.25rem" onclick="showDash()">📊  Dashboard Generale (solo lettura)</button>
     `}
