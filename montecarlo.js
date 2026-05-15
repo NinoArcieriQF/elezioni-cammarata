@@ -87,8 +87,16 @@ function mcBallotStream(sezNum) {
 }
 
 /* ── Trend per sezione (ultime 50 / 100 schede) ─────────── */
+/* ── Trend per sezione (ultime 50 / 100 schede) ─────────── */
 function calculateTrendsBySezione() {
   const trends = [];
+  
+  // --- PARAMETRI DI STABILIZZAZIONE (Puoi regolarli) ---
+  const SOGLIA_50 = 20;    // [MODIFICA 2] Prima era 8. Minimo schede recenti necessarie
+  const SOGLIA_100 = 35;   // [MODIFICA 2] Prima era 5. Minimo schede per il lotto da 100
+  const PESO_RECENTE = 0.35; // [MODIFICA 1] Inerzia: il trend recente pesa al 35%, lo storico al 65%
+  // -----------------------------------------------------
+
   for (let i = 1; i <= N; i++) {
     const s = allData[i] || defSez();
     const el = EL[i - 1];
@@ -112,27 +120,47 @@ function calculateTrendsBySezione() {
     const c50 = countSind(recent50);
     const c100 = countSind(recent100);
 
-    if (c50.n >= 8) {
+    // [MODIFICA 1 PREPARAZIONE]: Calcoliamo prima lo storico generale della sezione
+    const tv = num(s.vc1) + num(s.vc2);
+    let pTrainaStorico = 0.5;
+    let pMangStorico = 0.5;
+    if (tv > 0) {
+      pTrainaStorico = num(s.vc2) / tv;
+      pMangStorico = num(s.vc1) / tv;
+    }
+
+    // [MODIFICA 2]: Uso le nuove soglie alzate (SOGLIA_50 invece di 8)
+    if (c50.n >= SOGLIA_50) {
       nValid = c50.n;
       nTraina = c50.t;
       nMang = c50.m;
       nNone = c50.nn;
       const denom = Math.max(1, c50.n - c50.nn);
-      pTraina = c50.t / denom;
-      pMang = c50.m / denom;
+      
+      let pTrainaRecente = c50.t / denom;
+      let pMangRecente = c50.m / denom;
+
+      // [MODIFICA 1]: Media pesata tra il picco recente e lo storico consolidato
+      pTraina = (pTrainaRecente * PESO_RECENTE) + (pTrainaStorico * (1 - PESO_RECENTE));
+      pMang = (pMangRecente * PESO_RECENTE) + (pMangStorico * (1 - PESO_RECENTE));
       pNone = c50.nn / c50.n;
-    } else if (c100.n >= 5) {
+
+    } else if (c100.n >= SOGLIA_100) { // [MODIFICA 2]: Uso SOGLIA_100 invece di 5
       nValid = c100.n;
       const denom = Math.max(1, c100.n - c100.nn);
-      pTraina = c100.t / denom;
-      pMang = c100.m / denom;
+      
+      let pTrainaRecente = c100.t / denom;
+      let pMangRecente = c100.m / denom;
+
+      // [MODIFICA 1]: Media pesata anche qui
+      pTraina = (pTrainaRecente * PESO_RECENTE) + (pTrainaStorico * (1 - PESO_RECENTE));
+      pMang = (pMangRecente * PESO_RECENTE) + (pMangStorico * (1 - PESO_RECENTE));
       pNone = c100.nn / c100.n;
+
     } else {
-      const tv = num(s.vc1) + num(s.vc2);
-      if (tv > 0) {
-        pTraina = num(s.vc2) / tv;
-        pMang = num(s.vc1) / tv;
-      }
+      // Se non ci sono abbastanza schede recenti, ci affidiamo solo allo storico
+      pTraina = pTrainaStorico;
+      pMang = pMangStorico;
       nValid = num(s.votanti);
     }
 
@@ -155,8 +183,9 @@ function calculateTrendsBySezione() {
       votanti: num(s.votanti),
       remaining,
       expectedAtPoll,
-      pTraina: clamp(pTraina, 0.05, 0.95),
-      pMang: clamp(pMang, 0.05, 0.95),
+      // [MODIFICA 3]: Clamp stretto da 0.05/0.95 a 0.15/0.85 per tagliare le code estreme
+      pTraina: clamp(pTraina, 0.15, 0.85), 
+      pMang: clamp(pMang, 0.15, 0.85),
       pNone: clamp(pNone, 0, 0.35),
       p0pref: clamp(p0, 0, 1),
       p1pref: clamp(p1, 0, 1),
