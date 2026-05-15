@@ -513,31 +513,52 @@ function renMonteCarlo(spinnerOnly) {
       ${certaintyHTML}
     </div>
 
-    <div class="mc-grid2">
+    <div class="mc-grid2" style="grid-template-columns: 1.5fr 1fr; gap: 15px;">
       <div class="mc-card">
-        <span class="ct">Intervallo di confidenza 95%</span>
+        <span class="ct">Distribuzione Probabilistica (Bayes)</span>
         ${res.active ? `
-        <p style="font-size:13px;color:var(--tx2);margin-bottom:10px">
-          Con il 95% di probabilità, <strong style="color:var(--c2)">${trainName}</strong> finirà tra il
-          <strong>${res.ciLow.toFixed(1)}%</strong> e il <strong>${res.ciHigh.toFixed(1)}%</strong> dei voti sindaco.
+        <p style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px">
+          Margine di incertezza stimato: <strong style="color:#4ADE80">± ${((res.ciHigh - res.ciLow) / 2).toFixed(1)}%</strong>
         </p>
-        <div class="mc-ci-band">
-          <div class="mc-ci-range" id="mc-ci-range" style="left:${ciLeft}%;width:${ciW}%"></div>
-          <div class="mc-ci-dot" id="mc-ci-dot" style="left:${ciDot}%"></div>
+        <div class="mc-ci-band" style="height:12px; background:rgba(255,255,255,0.05); border-radius:4px; margin-bottom:15px; position:relative;">
+          <div class="mc-ci-range" style="position:absolute; left:${ciLeft}%; width:${ciW}%; background:#4ADE80; opacity:0.3; height:100%; border-radius:4px"></div>
+          <div class="mc-ci-dot" style="position:absolute; left:${ciDot}%; background:#fff; width:3px; height:20px; top:-4px; border-radius:2px"></div>
         </div>
-        <p style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;color:var(--c2);margin-top:8px">
-          ${trainName} ${res.pctTrainaNow.toFixed(1)}% <span style="font-size:14px;color:var(--tx3)">± ${((res.ciHigh - res.ciLow) / 2).toFixed(1)}%</span>
-        </p>
+        <div style="display: flex; gap: 8px;">
+           <div class="mc-data-chip">
+              <span class="mc-data-lbl">Min (2.5%)</span>
+              <span class="mc-data-val">${res.ciLow.toFixed(1)}%</span>
+           </div>
+           <div class="mc-data-chip" style="border-color:rgba(74,222,128,0.4)">
+              <span class="mc-data-lbl">Mediana</span>
+              <span class="mc-data-val" style="color:#4ADE80">${res.ciMid.toFixed(1)}%</span>
+           </div>
+           <div class="mc-data-chip">
+              <span class="mc-data-lbl">Max (97.5%)</span>
+              <span class="mc-data-val">${res.ciHigh.toFixed(1)}%</span>
+           </div>
+        </div>
         ` : '<p style="color:var(--tx3)">Dati insufficienti</p>'}
       </div>
+
       <div class="mc-card">
-        <span class="ct">Sezione decisiva</span>
-        <p style="font-size:13px;color:var(--tx2);line-height:1.6;margin-bottom:8px">${decisiveTxt}</p>
-        <p style="font-size:12px;color:var(--tx3)">Sezioni con trend Traina dominante: ${res.sezWonTraina || 0} · Mangiapane: ${res.sezWonMang || 0}</p>
-        <p style="font-size:11px;color:var(--tx3);margin-top:8px;font-family:'DM Mono',monospace">${res.sims ? fn(res.sims) + ' simulazioni · ' + (res._slow ? 'modalità veloce' : 'full') : ''}</p>
+        <span class="ct">Parametri di Calcolo</span>
+        <div style="margin-top:10px">
+          <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05)">
+            <span style="color:rgba(255,255,255,0.5); font-size:12px">Voti totali stimati</span>
+            <span style="color:#fff; font-family:monospace">${fn(res.expectedTotal)}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05)">
+            <span style="color:rgba(255,255,255,0.5); font-size:12px">Scenari vinti Traina</span>
+            <span style="color:var(--c2); font-family:monospace">${fn(res.winsTraina)}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; padding:6px 0">
+            <span style="color:rgba(255,255,255,0.5); font-size:12px">Affidabilità Modello</span>
+            <span style="color:#4ADE80; font-weight:700">${conf.confidence}%</span>
+          </div>
+        </div>
       </div>
     </div>
-
     <div class="mc-card" style="margin-bottom:10px">
       <span class="ct">Simulazione in corso</span>
       <div class="mc-casino" id="mc-casino"></div>
@@ -550,8 +571,14 @@ function renMonteCarlo(spinnerOnly) {
     </div>
 
     <div class="mc-summary">${summary}</div>
-  `;
+  `; // Chiude l'innerHTML
 
+  mcRunCasinoAnimation();
+  initMcChart();
+} // Chiude la funzione renMonteCarlo
+
+
+    
   mcRunCasinoAnimation();
   initMcChart();
 }
